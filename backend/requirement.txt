@@ -1,2 +1,0 @@
-nougat-ocr 
-llama-index 

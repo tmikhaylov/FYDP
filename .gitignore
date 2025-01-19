@@ -1,3 +1,7 @@
 frontend/.env*
 frontend/node_modules
 frontend/.next*
+backend/venv/
+backend/app.env
+backend/.DS_Store
+.DS_Store

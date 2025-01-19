@@ -1,0 +1,3 @@
+nougat-ocr 
+llama-index 
+flask

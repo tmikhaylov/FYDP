@@ -1,39 +1,109 @@
 "use client";
 
-import { chat } from "@/actions/chat"; 
-import Submit from "@/components/submit";
+import { useState, FormEvent, ChangeEvent } from "react";
 import { Input } from "@/components/ui/input";
+import Submit from "@/components/submit";
 import { useToast } from "@/components/ui/use-toast";
-import { ElementRef, useRef, useState } from "react";
 import { IoMdAttach } from "react-icons/io";
+import { useRouter } from "next/navigation";
 
-type ConversationComponent = {
+// We'll define a default export "Chat" that your page.tsx can import
+export default function Chat({
+  id,
+  messages,
+}: {
   id: string;
-  addMessage: (msg: string) => void;
-};
+  messages: {
+    id: string;
+    question: string;
+    answer?: string;
+  }[];
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Render existing messages */}
+      <div className="flex flex-col gap-4">
+        {messages.map((msg) => (
+          <div key={msg.id} className="flex flex-col gap-2">
+            <div className="font-semibold text-sky-500">{msg.question}</div>
+            <div className="dark:text-slate-300 text-slate-900 whitespace-pre-wrap">
+              {msg.answer || <em>No answer yet</em>}
+            </div>
+          </div>
+        ))}
+      </div>
 
-export function ChatInput({ addMessage, id }: ConversationComponent) {
-  const inputRef = useRef<ElementRef<"input">>(null);
+      {/* Our input for new messages */}
+      <ChatInputExisting conversationId={id} />
+    </div>
+  );
+}
+
+// Named export for the input logic
+export function ChatInputExisting({ conversationId }: { conversationId: string }) {
+  const router = useRouter();
   const { toast } = useToast();
+  const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
-  async function handleSubmit(formData: FormData) {
-    const message = formData.get("message") as string;
+  async function uploadAndExecute() {
+    let uploadId: string | undefined;
+
+    if (files.length > 0) {
+      const formData = new FormData();
+      formData.append("file", files[0]);
+      const res = await fetch("http://127.0.0.1:5000/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error("File upload failed");
+      }
+      const upData = await res.json();
+      uploadId = upData.upload_id;
+    }
+
+    // /execute
+    const execRes = await fetch("http://127.0.0.1:5000/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: message,
+        upload_id: uploadId,
+      }),
+    });
+    if (!execRes.ok) {
+      const errData = await execRes.json().catch(() => ({}));
+      throw new Error(errData.error || "Execute command failed");
+    }
+    const execData = await execRes.json();
+    const answer = execData.output || "No answer";
+
+    // Update conversation in DB
+    const storeRes = await fetch(`/api/conversation/${conversationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: message,
+        answer,
+      }),
+    });
+    if (!storeRes.ok) {
+      throw new Error("Updating conversation in DB failed");
+    }
+
+    // Re-fetch data on this page
+    router.refresh();
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     if (!message && files.length === 0) return;
 
-    // For real usage, consider separate logic if you want to do single file or multiple
-    addMessage(message);
-
     try {
-      await chat({
-        conversationId: id,
-        message,
-        files,
-      });
+      await uploadAndExecute();
+      setMessage("");
       setFiles([]);
-      if (inputRef.current) {
-        inputRef.current.value = "";
-      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -42,19 +112,18 @@ export function ChatInput({ addMessage, id }: ConversationComponent) {
     }
   }
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = event.target.files;
-    if (selectedFiles) {
-      setFiles((prev) => [...prev, ...Array.from(selectedFiles)]);
-    }
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files) return;
+    const newFiles = Array.from(e.target.files);
+    setFiles((prev) => [...prev, ...newFiles]);
   }
 
-  function handleRemoveFile(index: number) {
-    setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   return (
-    <form action={handleSubmit} className="flex flex-col gap-2 sm:pr-5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:pr-5">
       <div className="flex items-center gap-2">
         <label className="flex items-center justify-center h-12 w-12 text-xl text-sky-500 cursor-pointer">
           <IoMdAttach />
@@ -66,11 +135,11 @@ export function ChatInput({ addMessage, id }: ConversationComponent) {
           />
         </label>
         <Input
-          ref={inputRef}
           autoComplete="off"
-          name="message"
           placeholder="Ask me something..."
           className="h-12 flex-grow"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
         />
         <Submit />
       </div>
@@ -87,7 +156,7 @@ export function ChatInput({ addMessage, id }: ConversationComponent) {
               </span>
               <button
                 type="button"
-                onClick={() => handleRemoveFile(i)}
+                onClick={() => removeFile(i)}
                 className="text-red-500 text-xl"
               >
                 &times;

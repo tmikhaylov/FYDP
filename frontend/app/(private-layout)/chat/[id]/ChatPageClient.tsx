@@ -1,44 +1,76 @@
 "use client";
 
 import { useState, FormEvent, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import { IoMdAttach } from "react-icons/io";
 import { Input } from "@/components/ui/input";
 import Submit from "@/components/submit";
 import { useToast } from "@/components/ui/use-toast";
-import { IoMdAttach } from "react-icons/io";
-import { useRouter } from "next/navigation";
 
-export default function ChatInput() {
+// Example message type
+type Message = {
+  id: string;
+  question: string;
+  answer?: string;
+};
+
+// Props from the server component
+export default function ChatPageClient({
+  id,
+  messages,
+}: {
+  id: string;
+  messages: Message[];
+}) {
+  return (
+    <div className="flex flex-col min-h-screen w-full bg-background">
+      {/* Scrollable area for messages */}
+      <div className="flex-1 overflow-y-auto p-4 sm:w-[95%] mx-auto">
+        {messages.map((msg) => (
+          <div key={msg.id} className="mb-6">
+            <div className="font-semibold text-sky-500">{msg.question}</div>
+            <div className="dark:text-slate-300 text-slate-900 whitespace-pre-wrap">
+              {msg.answer || <em>No answer yet</em>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Sticky/fixed input at bottom */}
+      <div className="sticky bottom-0 w-full border-t border-gray-300 dark:border-slate-700 bg-background p-4">
+        <ChatInputExisting conversationId={id} />
+      </div>
+    </div>
+  );
+}
+
+/** 
+ * This is the same logic you had for uploading a file, calling /execute, 
+ * patching /api/conversation/:id, etc.
+ */
+function ChatInputExisting({ conversationId }: { conversationId: string }) {
   const router = useRouter();
   const { toast } = useToast();
-
-  // We'll track both the typed message and any attached files in state
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
-  // This function does:
-  // 1) Upload file => get upload_id
-  // 2) POST /execute => get answer
-  // 3) POST /api/conversation => store Q&A in DB => get conversationId
-  // 4) router.push(...) to the new conversation page
   async function uploadAndExecute() {
     let uploadId: string | undefined;
 
-    // (1) Upload file if any
+    // 1) If a file is attached, upload it
     if (files.length > 0) {
       const formData = new FormData();
-      formData.append("file", files[0]); // take the first
+      formData.append("file", files[0]);
       const res = await fetch("http://127.0.0.1:5000/upload", {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) {
-        throw new Error("File upload failed");
-      }
-      const uploadJson = await res.json();
-      uploadId = uploadJson.upload_id;
+      if (!res.ok) throw new Error("File upload failed");
+      const data = await res.json();
+      uploadId = data.upload_id;
     }
 
-    // (2) Call /execute
+    // 2) /execute with text + uploadId
     const execRes = await fetch("http://127.0.0.1:5000/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,9 +86,9 @@ export default function ChatInput() {
     const execData = await execRes.json();
     const answer = execData.output || "No answer";
 
-    // (3) Store Q&A in your Next app's DB
-    const storeRes = await fetch("/api/conversation", {
-      method: "POST",
+    // 3) Update conversation in DB
+    const storeRes = await fetch(`/api/conversation/${conversationId}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question: message,
@@ -64,45 +96,40 @@ export default function ChatInput() {
       }),
     });
     if (!storeRes.ok) {
-      throw new Error("Storing conversation in DB failed");
+      throw new Error("Updating conversation in DB failed");
     }
-    const storeData = await storeRes.json();
-    const conversationId = storeData.id;
 
-    // (4) Navigate to that new conversation
-    router.push(`/chat/${conversationId}`);
+    // 4) Re‐fetch the page
+    router.refresh();
   }
 
-  // The form's onSubmit
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!message && files.length === 0) return;
 
     try {
       await uploadAndExecute();
-      // Clear out UI
       setMessage("");
       setFiles([]);
-    } catch (err: any) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: err?.message || "Something went wrong",
+        description: error.message || "Something went wrong",
       });
     }
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     if (!e.target.files) return;
-    const newFiles = Array.from(e.target.files);
-    setFiles((prev) => [...prev, ...newFiles]);
+    setFiles([ ...files, ...Array.from(e.target.files)]);
   }
 
-  function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+  function removeFile(idx: number) {
+    setFiles(files.filter((_, i) => i !== idx));
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:pr-5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <label className="flex items-center justify-center h-12 w-12 text-xl text-sky-500 cursor-pointer">
           <IoMdAttach />
@@ -113,6 +140,7 @@ export default function ChatInput() {
             className="hidden"
           />
         </label>
+
         <Input
           autoComplete="off"
           placeholder="Ask me something..."
@@ -120,24 +148,19 @@ export default function ChatInput() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
+
         <Submit />
       </div>
 
-      {/* Display attached files */}
       {files.length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-2">
-          {files.map((file, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg"
-            >
-              <span className="text-sm truncate max-w-[200px]">
-                {file.name}
-              </span>
+        <div className="flex flex-wrap gap-2">
+          {files.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg">
+              <span className="text-sm truncate max-w-[200px]">{f.name}</span>
               <button
                 type="button"
-                onClick={() => removeFile(index)}
                 className="text-red-500 text-xl"
+                onClick={() => removeFile(i)}
               >
                 &times;
               </button>

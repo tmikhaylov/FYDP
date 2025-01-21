@@ -1,21 +1,25 @@
+// app/(private-layout)/chat/[id]/page.tsx
 import prisma from "@/prisma/client";
 import { notFound } from "next/navigation";
-import Chat from "./chat";
 import { JsonMessagesArraySchema } from "@/types";
+import ChatPageClient from "./ChatPageClient";
 
 type PageParams = {
-  params: {
-    id: string;
-  };
+  params: { id: string };
 };
 
-export default async function ChatSpecificPage({ params: { id } }: PageParams) {
-  const res = await prisma.conversation.findUnique({
-    where: {
-      id,
-    },
+export default async function ChatPageServer({ params: { id } }: PageParams) {
+  // 1) Load from DB on the server
+  const convo = await prisma.conversation.findUnique({
+    where: { id },
   });
-  if (!res) return notFound();
-  const parseResult = JsonMessagesArraySchema.parse(res.messages);
-  return <Chat id={id} messages={parseResult} />;
+  if (!convo) {
+    return notFound();
+  }
+
+  // 2) Parse messages if needed
+  const messages = JsonMessagesArraySchema.parse(convo.messages);
+
+  // 3) Pass data to our client component
+  return <ChatPageClient id={id} messages={messages} />;
 }

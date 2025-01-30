@@ -2,35 +2,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/prisma/client";
 import { generateRandomId } from "@/lib/utils";
-
-// 1) Import getServerSession & your authConfig
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
 
+type Message = {
+  id: string;
+  question: string;
+  answer?: string;
+};
+
 export async function POST(req: NextRequest) {
   try {
-    // 2) Get the session
     const session = await getServerSession(authConfig);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    // 3) Parse question + answer
     const { question, answer } = await req.json();
-    if (!question || !answer) {
-      return NextResponse.json({ error: "Missing data" }, { status: 400 });
-    }
 
-    // 4) Build messages array
-    const newConversationId = generateRandomId(8);
-    const messages = [{ id: newConversationId, question, answer }];
+    // name => if you want to use 'question' or some fallback
+    const name = question || "New conversation";
 
-    // 5) Actually create the conversation
+    // Provide an explicit type
+    const messages: Message[] = [];
+
+    // Now create the conversation with an empty messages array
     const result = await prisma.conversation.create({
       data: {
-        name: question,
+        name,
         messages,
-        userId: session.user.id, // <-- Real user ID from your DB
+        userId: session.user.id,
       },
     });
 

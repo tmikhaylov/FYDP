@@ -11,39 +11,54 @@ export default function ChatInput() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // We'll track both the typed message and any attached files in state
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
-  // This function does:
-  // 1) Upload file => get upload_id
-  // 2) POST /execute => get answer
-  // 3) POST /api/conversation => store Q&A in DB => get conversationId
-  // 4) router.push(...) to the new conversation page
-  async function uploadAndExecute() {
-    let uploadId: string | undefined;
+  // 1) Create conversation in DB -- but no Q/A yet, just an empty array
+  async function createConversationInDB() {
+    // We'll pass either an empty message or no question/answer for now
+    const storeRes = await fetch("/api/conversation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // If your route requires question/answer, remove them or supply placeholders.
+      body: JSON.stringify({
+        question: null, // or ""
+        answer: null,
+      }),
+    });
+    if (!storeRes.ok) throw new Error("Storing conversation in DB failed");
+    const storeData = await storeRes.json();
+    return storeData.id; // conversationId
+  }
 
-    // (1) Upload file if any
-    if (files.length > 0) {
-      const formData = new FormData();
-      formData.append("file", files[0]); // take the first
-      const res = await fetch("http://127.0.0.1:5000/upload", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        throw new Error("File upload failed");
-      }
-      const uploadJson = await res.json();
-      uploadId = uploadJson.upload_id;
+  // 2) Upload file if any
+  async function uploadFile(conversationId: string, file: File) {
+    const formData = new FormData();
+    formData.append("conversation_id", conversationId);
+    formData.append("file", file);
+
+    const res = await fetch("http://127.0.0.1:5000/upload", {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      throw new Error("File upload failed");
     }
+    const data = await res.json();
+    return data.upload_id;
+  }
 
-    // (2) Call /execute
+  // 3) Call /execute to get the real answer
+  async function callExecute(text: string, uploadId: string | undefined) {
+    if (!uploadId) {
+      // No file scenario - purely optional
+      return `Simulated no-file answer: You said: ${text}`;
+    }
     const execRes = await fetch("http://127.0.0.1:5000/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: message,
+        text,
         upload_id: uploadId,
       }),
     });
@@ -52,35 +67,49 @@ export default function ChatInput() {
       throw new Error(errData.error || "Execute command failed");
     }
     const execData = await execRes.json();
-    const answer = execData.output || "No answer";
+    return execData.output || "No answer";
+  }
 
-    // (3) Store Q&A in your Next app's DB
-    const storeRes = await fetch("/api/conversation", {
-      method: "POST",
+  // 4) Patch conversation with final Q/A
+  async function patchConversation(conversationId: string, question: string, answer: string) {
+    const patchRes = await fetch(`/api/conversation/${conversationId}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        question: message,
+        question,
         answer,
       }),
     });
-    if (!storeRes.ok) {
-      throw new Error("Storing conversation in DB failed");
+    if (!patchRes.ok) {
+      throw new Error("Failed to update conversation with final answer");
     }
-    const storeData = await storeRes.json();
-    const conversationId = storeData.id;
-
-    // (4) Navigate to that new conversation
-    router.push(`/chat/${conversationId}`);
   }
 
-  // The form's onSubmit
+  // 5) The main onSubmit
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!message && files.length === 0) return;
 
     try {
-      await uploadAndExecute();
-      // Clear out UI
+      // (a) Create conversation with empty messages
+      const conversationId = await createConversationInDB();
+
+      // (b) If file is attached, upload it => get uploadId
+      let uploadId: string | undefined;
+      if (files.length > 0) {
+        uploadId = await uploadFile(conversationId, files[0]);
+      }
+
+      // (c) Call /execute to get final answer
+      const finalAnswer = await callExecute(message, uploadId);
+
+      // (d) Patch conversation with the real Q/A
+      await patchConversation(conversationId, message, finalAnswer);
+
+      // (e) Navigate to the new conversation
+      router.push(`/chat/${conversationId}`);
+
+      // Clear UI
       setMessage("");
       setFiles([]);
     } catch (err: any) {
@@ -123,7 +152,6 @@ export default function ChatInput() {
         <Submit />
       </div>
 
-      {/* Display attached files */}
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-2">
           {files.map((file, index) => (

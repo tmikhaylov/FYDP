@@ -5,3 +5,5 @@ frontend/.next*
 backend/.DS_Store
 backend/C:/*
 backend/venv/*
+frontend/projects/*
+frontend/prisma/migrations/*

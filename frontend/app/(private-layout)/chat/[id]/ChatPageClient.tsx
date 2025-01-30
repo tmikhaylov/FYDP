@@ -7,14 +7,12 @@ import { Input } from "@/components/ui/input";
 import Submit from "@/components/submit";
 import { useToast } from "@/components/ui/use-toast";
 
-// Example message type
 type Message = {
   id: string;
   question: string;
   answer?: string;
 };
 
-// Props from the server component
 export default function ChatPageClient({
   id,
   messages,
@@ -44,38 +42,38 @@ export default function ChatPageClient({
   );
 }
 
-/** 
- * This is the same logic you had for uploading a file, calling /execute, 
- * patching /api/conversation/:id, etc.
- */
 function ChatInputExisting({ conversationId }: { conversationId: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
-  async function uploadAndExecute() {
-    let uploadId: string | undefined;
+  async function uploadFile(convoId: string, file: File) {
+    const formData = new FormData();
+    formData.append("conversation_id", convoId);
+    formData.append("file", file);
 
-    // 1) If a file is attached, upload it
-    if (files.length > 0) {
-      const formData = new FormData();
-      formData.append("file", files[0]);
-      const res = await fetch("http://127.0.0.1:5000/upload", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("File upload failed");
-      const data = await res.json();
-      uploadId = data.upload_id;
+    const res = await fetch("http://127.0.0.1:5000/upload", {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      throw new Error("File upload failed");
     }
+    const data = await res.json();
+    return data.upload_id; 
+  }
 
-    // 2) /execute with text + uploadId
+  async function callExecute(text: string, uploadId: string | undefined) {
+    if (!uploadId) {
+      // no file scenario
+      return "No file, simulated answer...";
+    }
     const execRes = await fetch("http://127.0.0.1:5000/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: message,
+        text,
         upload_id: uploadId,
       }),
     });
@@ -84,23 +82,21 @@ function ChatInputExisting({ conversationId }: { conversationId: string }) {
       throw new Error(errData.error || "Execute command failed");
     }
     const execData = await execRes.json();
-    const answer = execData.output || "No answer";
+    return execData.output || "No answer";
+  }
 
-    // 3) Update conversation in DB
+  async function patchConversation(question: string, answer: string) {
     const storeRes = await fetch(`/api/conversation/${conversationId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        question: message,
+        question,
         answer,
       }),
     });
     if (!storeRes.ok) {
       throw new Error("Updating conversation in DB failed");
     }
-
-    // 4) Re‐fetch the page
-    router.refresh();
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -108,24 +104,39 @@ function ChatInputExisting({ conversationId }: { conversationId: string }) {
     if (!message && files.length === 0) return;
 
     try {
-      await uploadAndExecute();
+      let uploadId: string | undefined;
+      if (files.length > 0) {
+        uploadId = await uploadFile(conversationId, files[0]);
+      }
+
+      // optionally call /execute
+      const finalAnswer = await callExecute(message, uploadId);
+
+      // patch the conversation with new Q/A
+      await patchConversation(message, finalAnswer);
+
+      // Clear local states
       setMessage("");
       setFiles([]);
-    } catch (error: any) {
+
+      // Refresh the page to see new messages
+      router.refresh();
+    } catch (err: any) {
       toast({
         title: "Error",
-        description: error.message || "Something went wrong",
+        description: err?.message || "Something went wrong",
       });
     }
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     if (!e.target.files) return;
-    setFiles([ ...files, ...Array.from(e.target.files)]);
+    const newFiles = Array.from(e.target.files);
+    setFiles((prev) => [...prev, ...newFiles]);
   }
 
-  function removeFile(idx: number) {
-    setFiles(files.filter((_, i) => i !== idx));
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   return (
@@ -140,7 +151,6 @@ function ChatInputExisting({ conversationId }: { conversationId: string }) {
             className="hidden"
           />
         </label>
-
         <Input
           autoComplete="off"
           placeholder="Ask me something..."
@@ -148,15 +158,19 @@ function ChatInputExisting({ conversationId }: { conversationId: string }) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
-
         <Submit />
       </div>
 
       {files.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {files.map((f, i) => (
-            <div key={i} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg">
-              <span className="text-sm truncate max-w-[200px]">{f.name}</span>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {files.map((file, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg"
+            >
+              <span className="text-sm truncate max-w-[200px]">
+                {file.name}
+              </span>
               <button
                 type="button"
                 className="text-red-500 text-xl"

@@ -7,3 +7,4 @@ backend/C:/*
 backend/venv/*
 frontend/projects/*
 frontend/prisma/migrations/*
+backend/config.yaml

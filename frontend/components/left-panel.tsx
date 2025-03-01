@@ -11,8 +11,9 @@ import { buttonVariants } from "./ui/button";
 import prisma from "@/prisma/client";
 import { getUser } from "@/lib/auth";
 import { ScrollArea } from "./ui/scroll-area";
+import NewProjectButton from "./NewProjectButton";
 
-export default function LeftPanel() {
+export default async function LeftPanel() {
   return (
     <Sheet>
       <SheetTrigger>
@@ -21,9 +22,13 @@ export default function LeftPanel() {
           <span className="mt-1 sm:hidden flex">Menu</span>
         </div>
       </SheetTrigger>
+
       <SheetContent side="left" className="min-w-[390px] px-0">
         <div>
-          <h3 className="px-7 text-xl font-semibold">Conversations</h3>
+          <h3 className="px-7 text-xl font-semibold">Your Projects</h3>
+          {/* Renders the client component with the button */}
+          <NewProjectButton />
+
           <Suspense
             fallback={
               <p className={buttonVariants({ variant: "link" })}>Loading...</p>
@@ -53,10 +58,11 @@ async function ConversationList() {
     },
   });
 
-  if(!res) return null;
+  if (!res) return null;
   const { conversations } = res;
+
   return (
-    <ScrollArea className="flex flex-col mt-7 items-start overflow-y-auto h-[90vh] pb-5">
+    <ScrollArea className="flex flex-col mt-7 items-start overflow-y-auto h-[90vh] pb-12">
       {conversations.map((cn) => (
         <SheetClose asChild key={cn.id}>
           <Link

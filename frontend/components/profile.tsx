@@ -15,18 +15,19 @@ import { UserIcon } from "lucide-react";
 export default async function Profile() {
   const session = await getUser();
   if (!session?.user) return null;
+
   return (
     <div>
       <Dialog>
         <DialogTrigger asChild>
-          <Button variant="link" size="sm">
+          <Button variant="link" size="sm" aria-label="Open settings dialog">
             <UserIcon className="w-5 h-5 sm:hidden flex" />
-            <span className="sm:flex hidden">My account</span>
+            <span className="sm:flex hidden">Settings</span>
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent aria-labelledby="dialog-title">
           <DialogHeader>
-            <DialogTitle>My account</DialogTitle>
+            <DialogTitle id="dialog-title">My account</DialogTitle>
             <div className="pt-8 pb-4 flex flex-col gap-6">
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="email">Email</Label>

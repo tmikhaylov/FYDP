@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, FormEvent, ChangeEvent, useEffect } from "react";
+import { useState, useRef, FormEvent, ChangeEvent, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import Submit from "@/components/submit";
 import { useToast } from "@/components/ui/use-toast";
-import { IoMdAttach, IoMdArrowUp } from "react-icons/io";
+import { IoMdAttach } from "react-icons/io";
+import { BsWebcam } from "react-icons/bs";
 import { useRouter } from "next/navigation";
 
 export default function ChatInputNew({
@@ -12,10 +13,15 @@ export default function ChatInputNew({
   onUpdateAnswer,
 }: {
   onNewMessage: (q: string, fileNames: string[]) => string;
-  onUpdateAnswer: (tempId: string, finalAnswer: string, conversationId: string | null) => void;
+  onUpdateAnswer: (
+    tempId: string,
+    finalAnswer: string,
+    conversationId: string | null
+  ) => void;
 }) {
   const router = useRouter();
   const { toast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -29,7 +35,6 @@ export default function ChatInputNew({
   const [projectId, setProjectId] = useState("project_1");
   const [scannedPdfId, setScannedPdfId] = useState(0);
 
-  // Fake progress bar effect
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isLoading) {
@@ -45,7 +50,6 @@ export default function ChatInputNew({
     };
   }, [isLoading]);
 
-  // 1) Create new conversation in DB
   async function createConversationInDB() {
     const storeRes = await fetch("/api/conversation", {
       method: "POST",
@@ -58,15 +62,13 @@ export default function ChatInputNew({
     if (!storeRes.ok) throw new Error("Storing conversation in DB failed");
     const storeData = await storeRes.json();
     setProjectId(storeData.project_id);
-    return storeData.id; // conversation ID
+    return storeData.id;
   }
 
-  // 2) Upload file if present
   async function uploadFile(conversationId: string, file: File) {
     const formData = new FormData();
     formData.append("conversation_id", conversationId);
     formData.append("file", file);
-
     const res = await fetch("http://127.0.0.1:5000/upload", {
       method: "POST",
       body: formData,
@@ -76,7 +78,6 @@ export default function ChatInputNew({
     return data.upload_id;
   }
 
-  // 3) Call /execute
   async function callExecute(text: string, uploadId: string | undefined) {
     if (!uploadId) {
       return `Simulated no-file answer: You said: ${text}`;
@@ -94,22 +95,21 @@ export default function ChatInputNew({
     return execData.output || "No answer";
   }
 
-  // 4) Patch conversation with final Q/A
   async function patchConversation(
     conversationId: string,
     question: string,
-    answer: string
+    answer: string,
+    attachments: string[]
   ) {
     const patchRes = await fetch(`/api/conversation/${conversationId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, answer }),
+      body: JSON.stringify({ question, answer, attachments }),
     });
     if (!patchRes.ok)
       throw new Error("Failed to update conversation with final answer");
   }
 
-  // 5) Handle "Capture Document" (IoMdArrowUp)
   async function captureDocumentPhoto(clean = "") {
     const outputFilename = `captured_document_${captureIndex}.jpg`;
     const res = await fetch("http://127.0.0.1:5000/capture-document", {
@@ -122,7 +122,6 @@ export default function ChatInputNew({
         should_clean: clean,
       }),
     });
-
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || "Capture document photo failed");
@@ -133,7 +132,7 @@ export default function ChatInputNew({
 
   async function createPdf() {
     try {
-      const res = await fetch("http://127.0.0.1:5000/capture-to-pdf", {
+      await fetch("http://127.0.0.1:5000/capture-to-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -157,37 +156,21 @@ export default function ChatInputNew({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Main form submission
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!message && files.length === 0) return;
-
-    // Immediately create an optimistic bubble
     const fileNames = files.map((f) => f.name);
     const tempId = onNewMessage(message, fileNames);
-
     try {
       setIsLoading(true);
-
-      // Create conversation in DB
       const conversationId = await createConversationInDB();
-
-      // Upload file if any
       let uploadId: string | undefined;
       if (files.length > 0) {
         uploadId = await uploadFile(conversationId, files[0]);
       }
-
-      // Execute
       const finalAnswer = await callExecute(message, uploadId);
-
-      // Update DB with final Q/A
-      await patchConversation(conversationId, message, finalAnswer);
-
-      // Update the bubble + navigate
+      await patchConversation(conversationId, message, finalAnswer, fileNames);
       onUpdateAnswer(tempId, finalAnswer, conversationId);
-
-      // Clear local form states
       setMessage("");
       setFiles([]);
     } catch (err: any) {
@@ -195,7 +178,6 @@ export default function ChatInputNew({
         title: "Error",
         description: err.message || "Something went wrong",
       });
-      // Show error in the bubble
       onUpdateAnswer(tempId, "Error: " + err.message, null);
     } finally {
       setIsLoading(false);
@@ -204,8 +186,7 @@ export default function ChatInputNew({
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        {/* Progress bar */}
+      <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-2">
         {isLoading && (
           <div className="bg-gray-300 h-2 w-full rounded">
             <div
@@ -214,20 +195,11 @@ export default function ChatInputNew({
             />
           </div>
         )}
-
-        <div className="flex items-center gap-2">
-          {/* Attach button */}
-          <label className="flex items-center justify-center h-12 w-12 text-xl text-sky-500 cursor-pointer">
-            <IoMdAttach />
-            <input
-              type="file"
-              multiple
-              onChange={handleFileChange}
-              className="hidden"
-            />
+        <div className="flex items-end gap-2">
+          <label className="flex items-center justify-center text-xl text-sky-500 cursor-pointer">
+            <IoMdAttach className="w-10 h-10 p-2" />
+            <input type="file" multiple onChange={handleFileChange} className="hidden" />
           </label>
-
-          {/* Capture document (IoMdArrowUp) */}
           <button
             type="button"
             onClick={async () => {
@@ -240,25 +212,26 @@ export default function ChatInputNew({
                 console.error(error);
               }
             }}
-            className="flex items-center justify-center h-12 w-12 text-xl text-sky-500 cursor-pointer"
+            className="flex items-center justify-center text-xl text-sky-500 cursor-pointer"
           >
-            <IoMdArrowUp />
+            <BsWebcam className="w-10 h-10 p-2" />
           </button>
-
-          {/* Text input */}
           <Input
+            multiline
             autoComplete="off"
             placeholder="Ask me something..."
-            className="h-12 flex-grow"
+            className="flex-grow"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                formRef.current?.requestSubmit();
+              }
+            }}
           />
-
-          {/* Submit button */}
           <Submit disabled={isLoading} />
         </div>
-
-        {/* Display any attached files */}
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {files.map((file, index) => (
@@ -266,9 +239,7 @@ export default function ChatInputNew({
                 key={index}
                 className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg"
               >
-                <span className="text-sm truncate max-w-[200px]">
-                  {file.name}
-                </span>
+                <span className="text-sm truncate max-w-[200px]">{file.name}</span>
                 <button
                   type="button"
                   onClick={() => removeFile(index)}
@@ -281,18 +252,13 @@ export default function ChatInputNew({
           </div>
         )}
       </form>
-
-      {/* Modal for scanned images / saving PDF */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black opacity-50"
             onClick={() => setShowModal(false)}
           ></div>
-
-          {/* Modal window */}
-          <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg p-4">
+          <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg p-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">New Scan</h2>
               <button

@@ -13,16 +13,27 @@ export default function ToggleTheme() {
     setMounted(true);
   }, []);
 
+  // Only render once the theme is known (avoids mismatches on SSR).
   if (!mounted) return null;
 
   return (
     <>
-      {theme == "light" ? (
-        <Button variant="ghost" size="icon" onClick={() => setTheme("dark")}>
+      {theme === "light" ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme("dark")}
+          aria-label="Switch to dark theme"
+        >
           <MoonIcon className="w-5 h-5" />
         </Button>
       ) : (
-        <Button variant="ghost" size="icon" onClick={() => setTheme("light")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme("light")}
+          aria-label="Switch to light theme"
+        >
           <SunIcon className="w-5 h-5" />
         </Button>
       )}

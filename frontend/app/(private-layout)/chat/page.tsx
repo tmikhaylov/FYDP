@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ChatInputNew from "./input";
 import { generateRandomId } from "@/lib/utils";
+import Footer from "@/components/footer";
 
 export default function NewChatPage() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function NewChatPage() {
   return (
     <div className="flex flex-col min-h-screen w-full bg-background">
       {/* Scrollable area for messages */}
-      <div className="flex-1 overflow-y-auto p-4 sm:w-[95%] mx-auto">
+      <div className="flex-1 overflow-y-auto p-4 sm:w-[95%] mx-auto custom-scrollbar">
         {/* Show welcome header ONLY if there are no messages yet */}
         {messages.length === 0 && (
           <div className="mb-6">
@@ -55,7 +56,7 @@ export default function NewChatPage() {
               How can I help you today?
             </div>
             <div className="dark:text-slate-300 text-slate-900">
-              ChatGPT can make mistakes. Consider checking important information.
+              ScanKit can make mistakes. Consider checking important information.
             </div>
           </div>
         )}
@@ -117,12 +118,13 @@ export default function NewChatPage() {
         ))}
       </div>
 
-      {/* Sticky/fixed input at bottom */}
-      <div className="sticky bottom-0 w-full border-t border-gray-300 dark:border-slate-700 bg-background p-4">
+      {/* Sticky input + Footer at bottom */}
+      <div className="sticky bottom-0 w-full border-t border-gray-300 dark:border-slate-700 bg-background p-4 flex flex-col">
         <ChatInputNew
           onNewMessage={handleNewMessage}
           onUpdateAnswer={handleUpdateAnswer}
         />
+        <Footer />
       </div>
     </div>
   );

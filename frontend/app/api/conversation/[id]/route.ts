@@ -5,16 +5,16 @@ import { generateRandomId } from "@/lib/utils";
 
 export async function PATCH(req: NextRequest, { params }: any) {
   try {
-    // 1) Grab the conversationId from the route
     const conversationId = params.id;
 
-    // 2) Parse question + answer from JSON
-    const { question, answer } = await req.json();
+    // Now parse attachments as well
+    const { question, answer, attachments } = await req.json();
+
     if (!question || !answer) {
       return NextResponse.json({ error: "Missing question or answer" }, { status: 400 });
     }
 
-    // 3) Find the existing conversation
+    // 1) Find the existing conversation
     const existing = await prisma.conversation.findUnique({
       where: { id: conversationId },
     });
@@ -22,20 +22,25 @@ export async function PATCH(req: NextRequest, { params }: any) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    // 4) Append a new Q/A object
+    // 2) Append a new Q/A object with attachments if any
     const newId = generateRandomId(8);
     const updatedMessages = [
       ...(existing.messages as any[]),
-      { id: newId, question, answer },
+      {
+        id: newId,
+        question,
+        answer,
+        // attachments can be undefined or an array of strings
+        attachments: attachments && Array.isArray(attachments) ? attachments : [],
+      },
     ];
 
-    // 5) Update conversation in DB
+    // 3) Update conversation in DB
     await prisma.conversation.update({
       where: { id: conversationId },
       data: { messages: updatedMessages },
     });
 
-    // 6) Return success
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

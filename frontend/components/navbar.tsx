@@ -13,12 +13,20 @@ const btnVariant = buttonVariants({
 
 export default function Navbar() {
   return (
-    <nav className="w-full flex flex-row items-center justify-between h-24 sm:mb-7 mmb-2 top-0 sticky bg-background">
+    <nav
+      className="w-full flex flex-row items-center justify-between h-24 sm:mb-7 mmb-2 top-0 sticky bg-background"
+      role="navigation"
+      aria-label="Main navigation"
+    >
       <NamedLogoWithLink />
       <div className="flex-row items-center flex">
         <ToggleTheme />
         <div className="sm:ml-3 flex flex-row items-center">
-          <Link href="/chat" className={btnVariant}>
+          <Link
+            href="/chat"
+            className={btnVariant}
+            aria-label="Create a new chat"
+          >
             <SquarePen className="w-5 h-5 sm:hidden flex" />
             <span className="sm:flex hidden">New chat</span>
           </Link>

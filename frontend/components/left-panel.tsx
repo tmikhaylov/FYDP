@@ -7,11 +7,11 @@ import {
 import { PanelLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
-import { buttonVariants } from "./ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import prisma from "@/prisma/client";
 import { getUser } from "@/lib/auth";
-import { ScrollArea } from "./ui/scroll-area";
-import NewProjectButton from "./NewProjectButton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import NewProjectButton from "@/components/NewProjectButton";
 
 export default async function LeftPanel() {
   return (
@@ -26,15 +26,13 @@ export default async function LeftPanel() {
       <SheetContent side="left" className="min-w-[390px] px-0">
         <div>
           <h3 className="px-7 text-xl font-semibold">Your Projects</h3>
-          {/* Renders the client component with the button */}
           <NewProjectButton />
-
           <Suspense
             fallback={
               <p className={buttonVariants({ variant: "link" })}>Loading...</p>
             }
           >
-            <ConversationList />
+            <ProjectList />
           </Suspense>
         </div>
       </SheetContent>
@@ -42,34 +40,30 @@ export default async function LeftPanel() {
   );
 }
 
-async function ConversationList() {
+async function ProjectList() {
   const session = await getUser();
   if (!session?.user) return null;
-  const res = await prisma.user.findUnique({
-    where: {
-      id: session.user.id,
-    },
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
     include: {
-      conversations: {
-        orderBy: {
-          createdAt: "desc",
-        },
+      projects: {
+        orderBy: { createdAt: "desc" },
       },
     },
   });
+  if (!user) return null;
 
-  if (!res) return null;
-  const { conversations } = res;
-
+  const { projects } = user;
   return (
     <ScrollArea className="flex flex-col mt-7 items-start overflow-y-auto h-[90vh] pb-12">
-      {conversations.map((cn) => (
-        <SheetClose asChild key={cn.id}>
+      {projects.map((proj) => (
+        <SheetClose asChild key={proj.id}>
           <Link
-            href={`/chat/${cn.id}`}
+            href={`/project/${proj.id}`}
             className="w-full my-3 px-8 hover:underline underline-offset-2"
           >
-            {cn.name.length > 35 ? cn.name.slice(0, 35) + "..." : cn.name}
+            {proj.name.length > 35 ? proj.name.slice(0, 35) + "..." : proj.name}
           </Link>
         </SheetClose>
       ))}

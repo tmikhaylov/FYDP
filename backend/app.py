@@ -605,8 +605,10 @@ from flask import Flask, request, jsonify
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from werkzeug.utils import secure_filename
-from llama_index.core import StorageContext, load_index_from_storage
 from flask_cors import CORS
+
+# For LlamaIndex operations
+from llama_index.core import StorageContext, load_index_from_storage
 
 app = Flask(__name__)
 CORS(app)
@@ -626,19 +628,18 @@ BASE_PROJECTS_DIR = os.path.abspath(
 ######################################
 # In-memory dictionary for upload statuses
 ######################################
-upload_status = {}
-# Structure:
 # upload_status[upload_id] = {
-#    'event': threading.Event(),
-#    'status': 'processing'|'finished'|'error',
-#    'error': None or str,
-#    'filepath': "<tmp file path>",
-#    'conversation_id': "<conversation_id>",
-#    'final_filename': "<upload_id>_<filename>"
+#   'event': threading.Event(),
+#   'status': 'processing'|'finished'|'error',
+#   'error': None or str,
+#   'filepath': "<tmp file path>",
+#   'conversation_id': "<conversation_id>",
+#   'final_filename': "<upload_id>_<filename>"
 # }
+upload_status = {}
 
 ######################################
-# Helper: Load Config (for /delete endpoint)
+# Helper: Load config for /delete
 ######################################
 def load_config(config_path="config.yaml"):
     with open(config_path, "r") as file:
@@ -650,6 +651,12 @@ def load_config(config_path="config.yaml"):
 ######################################
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """
+    1. Expects 'file' in request.files
+    2. Expects 'conversation_id' in request.form
+    3. Saves file to tmp folder => starts background thread => copies file to final folder
+    4. Returns { upload_id }
+    """
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
@@ -676,24 +683,21 @@ def upload_file():
         'final_filename': unique_filename
     }
 
-    def background_process():
-        try:
-            # Simulate processing time
-            time.sleep(3)
-            upload_status[upload_id]['status'] = 'finished'
+    try:
+        # Simulate or do time-consuming processing
+        upload_status[upload_id]['status'] = 'finished'
 
-            # Copy file to final location in projects folder
-            conv_folder = os.path.join(BASE_PROJECTS_DIR, conversation_id)
-            os.makedirs(conv_folder, exist_ok=True)
-            final_path = os.path.join(conv_folder, unique_filename)
-            shutil.copyfile(tmp_path, final_path)
-        except Exception as e:
-            upload_status[upload_id]['status'] = 'error'
-            upload_status[upload_id]['error'] = str(e)
-        finally:
-            event.set()
+        # Copy file to final location in /projects/<conversation_id>/
+        conv_folder = os.path.join(BASE_PROJECTS_DIR, conversation_id)
+        os.makedirs(conv_folder, exist_ok=True)
+        final_path = os.path.join(conv_folder, unique_filename)
+        shutil.copyfile(tmp_path, final_path)
+    except Exception as e:
+        upload_status[upload_id]['status'] = 'error'
+        upload_status[upload_id]['error'] = str(e)
+    finally:
+        event.set()
 
-    threading.Thread(target=background_process, daemon=True).start()
     return jsonify({'upload_id': upload_id}), 200
 
 ######################################
@@ -701,6 +705,9 @@ def upload_file():
 ######################################
 @app.route('/status/<upload_id>', methods=['GET'])
 def get_status(upload_id):
+    """
+    Check the status of a given upload (processing, finished, error)
+    """
     info = upload_status.get(upload_id)
     if not info:
         return jsonify({'error': 'Invalid upload_id'}), 404
@@ -710,10 +717,16 @@ def get_status(upload_id):
     }), 200
 
 ######################################
-# /execute endpoint (with AI integration)
+# /execute endpoint => Real AI logic
 ######################################
 @app.route('/execute', methods=['POST'])
 def execute_command():
+    """
+    Expects JSON: { text, upload_id }
+    1. Waits for background upload to finish
+    2. If success, calls rag.py with final file path => returns rag.py stdout
+    3. If rag.py fails, return error
+    """
     data = request.json
     text = data.get('text')
     upload_id = data.get('upload_id')
@@ -724,83 +737,71 @@ def execute_command():
     if not info:
         return jsonify({'error': 'Invalid upload_id'}), 404
 
-    # Wait for processing to finish
+    # Wait for the background "processing" to finish
     info['event'].wait()
     if info['status'] == 'error':
         return jsonify({'error': info['error']}), 400
     if info['status'] != 'finished':
         return jsonify({'error': 'Processing not finished'}), 400
 
-    # Determine the final file path (copied to projects folder)
+    # Build the final path
     conversation_id = info['conversation_id']
     unique_filename = info['final_filename']
     final_path = os.path.join(BASE_PROJECTS_DIR, conversation_id, unique_filename)
 
-    # Build command to call rag.py for AI processing.
+    # Call rag.py
     cmd = [
         "python", "rag.py",
         "--file", final_path,
         "--query", text
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
+
     if result.returncode != 0:
-        response_text = f"Simulated response. You said: {text}"
-    else:
-        response_text = result.stdout.strip() or f"Simulated response. You said: {text}"
-    time.sleep(1)
-    print(response_text)
-    return jsonify({'output': response_text}), 200
+        # Return error from rag.py
+        err_msg = result.stderr.strip() or "Error running rag.py"
+        print("Error output:", err_msg)
+        return jsonify({'error': err_msg}), 400
 
-def detect_ipevo_usb():
-    """
-    Try to locate the IPEVO V4K Pro by its USB vendor and product IDs.
-    Replace the IDs below with the correct values for your device.
-    """
-    VENDOR_ID = 0x1778
-    PRODUCT_ID = 0xD002
-
-    device = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID)
-    if device is None:
-        print("IPEVO V4K Pro not detected via USB.")
-        return False
-    else:
-        print("IPEVO V4K Pro detected via USB!")
-        return True
+    # Return AI response from rag.py
+    output = result.stdout.strip()
+    return jsonify({'output': output}), 200
 
 ######################################
 # /capture-document endpoint
 ######################################
 @app.route("/capture-document", methods=["POST"])
 def capture_document():
-    print("[DEBUG] Received /capture-document request.")
+    """
+    Expects JSON: { camera_index, output_filename, project_id, should_clean }
+    Captures image from camera => saves to /projects/<project_id>/new_pdf/
+    """
     data = request.get_json(force=True)
     camera_index = data.get("camera_index", 1)
     output_filename = data.get("output_filename", "captured_document.jpg")
     project_id = data.get("project_id", "project_1")
     should_clean = data.get("should_clean", "")
-    
-    if should_clean == "clean":
-        print("[DEBUG] cleaning")
-        directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'))
-        for filename in os.listdir(directory):
-            file_path = os.path.join(directory, filename)
-            try:
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.unlink(file_path)
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
-            except Exception as e:
-                print(f"[DEBUG] Failed to delete {file_path}. Reason: {str(e)}")
-        print("[DEBUG] finished cleaning")
 
-    print(f"[DEBUG] JSON payload => camera_index: {camera_index}, output_filename: {output_filename}, project_id: {project_id}")
+    if should_clean == "clean":
+        directory = os.path.abspath(os.path.join(
+            os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+        ))
+        if os.path.exists(directory):
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print(f"[DEBUG] Failed to delete {file_path}. Reason: {str(e)}")
 
     try:
         saved_path = capture_document_photo(camera_index, output_filename, project_id)
         return jsonify({"path": saved_path}), 200
     except Exception as e:
         error_msg = f"Capture failed: {str(e)}"
-        print(f"[DEBUG] {error_msg}")
         return jsonify({"error": error_msg}), 500
 
 ######################################
@@ -812,16 +813,23 @@ def create_pdf():
     project_id = data.get('project_id')
     images = data.get('images')
     pdf_filename = data.get('pdf_filename', 'output.pdf')
-    
-    directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'))
-    pdf_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'projects', project_id))
+
+    directory = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+    ))
+    pdf_dir = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', 'frontend', 'projects', project_id
+    ))
     os.makedirs(pdf_dir, exist_ok=True)
     pdf_path = os.path.join(pdf_dir, pdf_filename)
 
     try:
+        # Use image size 3264x2448
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
         img_width, img_height = 3264, 2448
         c = canvas.Canvas(pdf_path, pagesize=(img_width, img_height))
-        
+
         for image in images:
             image_path = os.path.join(directory, image)
             if os.path.exists(image_path):
@@ -829,15 +837,13 @@ def create_pdf():
                 c.drawImage(image_path, 0, 0, width=img_width, height=img_height)
                 c.showPage()
             else:
-                print(f"Warning: {image_path} does not exist. Skipping this image.")
-        
+                print(f"Warning: {image_path} does not exist. Skipping.")
         c.save()
         return jsonify({
-            "message": "PDF created successfully", 
+            "message": "PDF created successfully",
             "pdf_path": pdf_path.replace("\\", "/")
         }), 200
     except Exception as e:
-        print(f"[DEBUG] {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 ######################################
@@ -845,31 +851,31 @@ def create_pdf():
 ######################################
 @app.route('/delete', methods=['POST'])
 def delete_file():
-    # Load configuration and set OPENAI_API_KEY
+    # Load config & set OPENAI_API_KEY
     config = load_config()
     load_dotenv()
     os.environ["OPENAI_API_KEY"] = config['api_key']['OPEN_AI']
-    
+
     data = request.json
     if 'upload_id' not in data:
         return jsonify({'error': 'upload_id is required'}), 400
     upload_id = data['upload_id']
-    
+
     info = upload_status.get(upload_id)
     if not info:
         return jsonify({'error': 'Invalid or unknown upload_id'}), 404
     file_path = info.get('filepath')
-    
-    # Use the unique filename as the document ID
+
+    # doc_id => unique filename
     doc_id = os.path.basename(file_path)
-    
-    # Delete the file from disk
+
+    # Delete file from disk
     try:
         os.remove(file_path)
     except Exception as e:
         return jsonify({'error': f'Failed to delete file from disk: {str(e)}'}), 500
 
-    # Determine storage directory for LlamaIndex (if applicable)
+    # Possibly remove from LlamaIndex
     project_name = data.get("project_name")
     PERSIST_DIR = os.path.join("./storage", project_name) if project_name else "./storage"
 
@@ -880,13 +886,14 @@ def delete_file():
             index.delete_ref_doc(doc_id, delete_from_docstore=True)
             index.storage_context.persist(persist_dir=PERSIST_DIR)
         except Exception as e:
-            return jsonify({'error': f'Failed to delete document from index: {str(e)}'}), 500
+            return jsonify({'error': f'Failed to delete doc from index: {str(e)}'}), 500
 
+    # Remove from our dictionary
     del upload_status[upload_id]
     return jsonify({'message': f'Document with id {upload_id} deleted successfully.'}), 200
 
 ######################################
-# Helper: capture_document_photo function
+# Helper: capture_document_photo
 ######################################
 def capture_document_photo(camera_index=1, output_filename="captured_document.jpg", project_id="project_1"):
     print(f"[DEBUG] Attempting to open camera at index={camera_index}")
@@ -898,9 +905,9 @@ def capture_document_photo(camera_index=1, output_filename="captured_document.jp
     if not cap.isOpened():
         raise PermissionError(
             f"[DEBUG] Failed to open camera index={camera_index}. "
-            "Check if the device is connected and the user has correct permissions."
+            "Check if device is connected and user has correct permissions."
         )
-    
+
     desired_width = 3264
     desired_height = 2448
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, desired_width)
@@ -915,7 +922,7 @@ def capture_document_photo(camera_index=1, output_filename="captured_document.jp
     for attempt in range(1, attempts + 1):
         ret, frame = cap.read()
         if ret and frame is not None:
-            print(f"[DEBUG] Successfully grabbed a frame on attempt {attempt}.")
+            print(f"[DEBUG] Successfully grabbed frame on attempt {attempt}.")
             break
         print(f"[DEBUG] Attempt {attempt}/{attempts} failed. Retrying in 1s...")
         time.sleep(1)
@@ -923,11 +930,12 @@ def capture_document_photo(camera_index=1, output_filename="captured_document.jp
     if frame is None:
         cap.release()
         raise RuntimeError(
-            f"[DEBUG] Camera (index={camera_index}) is open, "
-            f"but failed to capture a frame after {attempts} attempts."
+            f"[DEBUG] Camera (index={camera_index}) open but no frame after {attempts} attempts."
         )
 
-    directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'))
+    directory = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+    ))
     try:
         os.makedirs(directory, exist_ok=True)
     except OSError as e:
@@ -942,7 +950,7 @@ def capture_document_photo(camera_index=1, output_filename="captured_document.jp
 
     if not success:
         raise OSError(
-            f"[DEBUG] OpenCV could not write the file '{output_path}'. Check disk space and permissions."
+            f"[DEBUG] OpenCV could not write file '{output_path}'. Check disk space & permissions."
         )
 
     print(f"[DEBUG] Photo saved to {output_path}")
@@ -951,3 +959,4 @@ def capture_document_photo(camera_index=1, output_filename="captured_document.jp
 ######################################
 if __name__ == '__main__':
     app.run(host="127.0.0.1", debug=True, port=5000)
+

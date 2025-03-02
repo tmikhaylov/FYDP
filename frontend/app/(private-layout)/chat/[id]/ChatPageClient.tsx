@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import Submit from "@/components/submit";
 import { useToast } from "@/components/ui/use-toast";
 import { generateRandomId } from "@/lib/utils";
+import Image from 'next/image';
 
 type Message = {
   id: string;
@@ -297,7 +298,7 @@ export default function ChatPageClient({
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg p-4">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-2">
               <h2 className="text-lg font-semibold">New Scan</h2>
               <button
                 onClick={() => setShowModal(false)}
@@ -309,11 +310,13 @@ export default function ChatPageClient({
             <div>
               <div className="grid grid-cols-3 gap-2">
                 {capturedImages.map((filename, idx) => (
-                  <img
+                  <Image
                     key={idx}
                     src={`/projects/${projectId}/new_pdf/${filename}`}
                     alt={`Captured ${filename}`}
-                    className="w-full h-auto border rounded"
+                    className="w-full h-auto border rounded mb-2"
+                    width={100}
+                    height={100}
                   />
                 ))}
               </div>
@@ -326,7 +329,7 @@ export default function ChatPageClient({
                     console.error(error);
                   }
                 }}
-                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded"
+                className="mb-0 mr-2 px-4 py-2 bg-blue-500 text-white rounded"
               >
                 Scan another image
               </button>
@@ -341,7 +344,7 @@ export default function ChatPageClient({
                     console.error(error);
                   }
                 }}
-                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded"
+                className="mb-0 px-4 py-2 bg-blue-500 text-white rounded"
               >
                 Save as PDF
               </button>

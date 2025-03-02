@@ -589,47 +589,426 @@
 #     app.run(debug=True, host='127.0.0.1', port=5000)
 
 ## COMBINED BACKEND STARTS HERE ##
+# import os
+# import uuid
+# import threading
+# import time
+# import shutil
+# import cv2
+# import usb.core
+# import usb.util
+# import subprocess
+# import yaml
+# from dotenv import load_dotenv
+
+# from flask import Flask, request, jsonify
+# from reportlab.pdfgen import canvas
+# from reportlab.lib.pagesizes import letter
+# from werkzeug.utils import secure_filename
+# from flask_cors import CORS
+
+# # For LlamaIndex operations
+# from llama_index.core import StorageContext, load_index_from_storage
+
+# app = Flask(__name__)
+# CORS(app)
+
+# ######################################
+# # Paths and Directories
+# ######################################
+# UPLOAD_FOLDER = 'C:/tmp/uploads'  # The initial "processing" folder
+# os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# # Final folder structure for processed uploads:
+# # FYDP/frontend/projects/<conversationId>/
+# BASE_PROJECTS_DIR = os.path.abspath(
+#     os.path.join(os.path.dirname(__file__), "..", "frontend", "projects")
+# )
+
+# ######################################
+# # In-memory dictionary for upload statuses
+# ######################################
+# # upload_status[upload_id] = {
+# #   'event': threading.Event(),
+# #   'status': 'processing'|'finished'|'error',
+# #   'error': None or str,
+# #   'filepath': "<tmp file path>",
+# #   'conversation_id': "<conversation_id>",
+# #   'final_filename': "<upload_id>_<filename>"
+# # }
+# upload_status = {}
+
+# ######################################
+# # Helper: Load config for /delete
+# ######################################
+# def load_config(config_path="config.yaml"):
+#     with open(config_path, "r") as file:
+#         config = yaml.safe_load(file)
+#     return config
+
+# ######################################
+# # /upload endpoint
+# ######################################
+# @app.route('/upload', methods=['POST'])
+# def upload_file():
+#     """
+#     1. Expects 'file' in request.files
+#     2. Expects 'conversation_id' in request.form
+#     3. Saves file to tmp folder => starts background thread => copies file to final folder
+#     4. Returns { upload_id }
+#     """
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No file part'}), 400
+#     file = request.files['file']
+#     if file.filename == '':
+#         return jsonify({'error': 'No selected file'}), 400
+
+#     conversation_id = request.form.get('conversation_id')
+#     if not conversation_id:
+#         return jsonify({'error': 'No conversation_id provided'}), 400
+
+#     upload_id = str(uuid.uuid4())
+#     original_filename = secure_filename(file.filename)
+#     unique_filename = f"{upload_id}_{original_filename}"
+#     tmp_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+#     file.save(tmp_path)
+
+#     event = threading.Event()
+#     upload_status[upload_id] = {
+#         'event': event,
+#         'status': 'processing',
+#         'error': None,
+#         'filepath': tmp_path,
+#         'conversation_id': conversation_id,
+#         'final_filename': unique_filename
+#     }
+
+#     try:
+#         # Simulate or do time-consuming processing
+#         upload_status[upload_id]['status'] = 'finished'
+
+#         # Copy file to final location in /projects/<conversation_id>/
+#         conv_folder = os.path.join(BASE_PROJECTS_DIR, conversation_id)
+#         os.makedirs(conv_folder, exist_ok=True)
+#         final_path = os.path.join(conv_folder, unique_filename)
+#         shutil.copyfile(tmp_path, final_path)
+#     except Exception as e:
+#         upload_status[upload_id]['status'] = 'error'
+#         upload_status[upload_id]['error'] = str(e)
+#     finally:
+#         event.set()
+
+#     return jsonify({'upload_id': upload_id}), 200
+
+# ######################################
+# # /status/<upload_id> endpoint
+# ######################################
+# @app.route('/status/<upload_id>', methods=['GET'])
+# def get_status(upload_id):
+#     """
+#     Check the status of a given upload (processing, finished, error)
+#     """
+#     info = upload_status.get(upload_id)
+#     if not info:
+#         return jsonify({'error': 'Invalid upload_id'}), 404
+#     return jsonify({
+#         'status': info['status'],
+#         'error': info['error']
+#     }), 200
+
+# ######################################
+# # /execute endpoint => Real AI logic
+# ######################################
+# @app.route('/execute', methods=['POST'])
+# def execute_command():
+#     """
+#     Expects JSON: { text, upload_id }
+#     1. Waits for background upload to finish
+#     2. If success, calls rag.py with final file path => returns rag.py stdout
+#     3. If rag.py fails, return error
+#     """
+#     data = request.json
+#     text = data.get('text')
+#     upload_id = data.get('upload_id')
+#     if not text or upload_id is None:
+#         return jsonify({'error': 'No text or upload_id provided'}), 400
+
+#     info = upload_status.get(upload_id)
+#     if not info:
+#         return jsonify({'error': 'Invalid upload_id'}), 404
+
+#     # Wait for the background "processing" to finish
+#     info['event'].wait()
+#     if info['status'] == 'error':
+#         return jsonify({'error': info['error']}), 400
+#     if info['status'] != 'finished':
+#         return jsonify({'error': 'Processing not finished'}), 400
+
+#     # Build the final path
+#     conversation_id = info['conversation_id']
+#     unique_filename = info['final_filename']
+#     final_path = os.path.join(BASE_PROJECTS_DIR, conversation_id, unique_filename)
+
+#     # Call rag.py
+#     cmd = [
+#         "python", "rag.py",
+#         "--file", final_path,
+#         "--query", text
+#     ]
+#     result = subprocess.run(cmd, capture_output=True, text=True)
+
+#     if result.returncode != 0:
+#         # Return error from rag.py
+#         err_msg = result.stderr.strip() or "Error running rag.py"
+#         print("Error output:", err_msg)
+#         return jsonify({'error': err_msg}), 400
+
+#     # Return AI response from rag.py
+#     output = result.stdout.strip()
+#     return jsonify({'output': output}), 200
+
+# ######################################
+# # /capture-document endpoint
+# ######################################
+# @app.route("/capture-document", methods=["POST"])
+# def capture_document():
+#     """
+#     Expects JSON: { camera_index, output_filename, project_id, should_clean }
+#     Captures image from camera => saves to /projects/<project_id>/new_pdf/
+#     """
+#     data = request.get_json(force=True)
+#     camera_index = data.get("camera_index", 1)
+#     output_filename = data.get("output_filename", "captured_document.jpg")
+#     project_id = data.get("project_id", "project_1")
+#     should_clean = data.get("should_clean", "")
+
+#     if should_clean == "clean":
+#         directory = os.path.abspath(os.path.join(
+#             os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+#         ))
+#         if os.path.exists(directory):
+#             for filename in os.listdir(directory):
+#                 file_path = os.path.join(directory, filename)
+#                 try:
+#                     if os.path.isfile(file_path) or os.path.islink(file_path):
+#                         os.unlink(file_path)
+#                     elif os.path.isdir(file_path):
+#                         shutil.rmtree(file_path)
+#                 except Exception as e:
+#                     print(f"[DEBUG] Failed to delete {file_path}. Reason: {str(e)}")
+
+#     try:
+#         saved_path = capture_document_photo(camera_index, output_filename, project_id)
+#         return jsonify({"path": saved_path}), 200
+#     except Exception as e:
+#         error_msg = f"Capture failed: {str(e)}"
+#         return jsonify({"error": error_msg}), 500
+
+# ######################################
+# # /capture-to-pdf endpoint
+# ######################################
+# @app.route("/capture-to-pdf", methods=["POST"])
+# def create_pdf():
+#     data = request.get_json()
+#     project_id = data.get('project_id')
+#     images = data.get('images')
+#     pdf_filename = data.get('pdf_filename', 'output.pdf')
+
+#     directory = os.path.abspath(os.path.join(
+#         os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+#     ))
+#     pdf_dir = os.path.abspath(os.path.join(
+#         os.path.dirname(__file__), '..', 'frontend', 'projects', project_id
+#     ))
+#     os.makedirs(pdf_dir, exist_ok=True)
+#     pdf_path = os.path.join(pdf_dir, pdf_filename)
+
+#     try:
+#         # Use image size 3264x2448
+#         from reportlab.pdfgen import canvas
+#         from reportlab.lib.pagesizes import letter
+#         img_width, img_height = 3264, 2448
+#         c = canvas.Canvas(pdf_path, pagesize=(img_width, img_height))
+
+#         for image in images:
+#             image_path = os.path.join(directory, image)
+#             if os.path.exists(image_path):
+#                 c.setPageSize((img_width, img_height))
+#                 c.drawImage(image_path, 0, 0, width=img_width, height=img_height)
+#                 c.showPage()
+#             else:
+#                 print(f"Warning: {image_path} does not exist. Skipping.")
+#         c.save()
+#         return jsonify({
+#             "message": "PDF created successfully",
+#             "pdf_path": pdf_path.replace("\\", "/")
+#         }), 200
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+# ######################################
+# # /delete endpoint
+# ######################################
+# @app.route('/delete', methods=['POST'])
+# def delete_file():
+#     # Load config & set OPENAI_API_KEY
+#     config = load_config()
+#     load_dotenv()
+#     os.environ["OPENAI_API_KEY"] = config['api_key']['OPEN_AI']
+
+#     data = request.json
+#     if 'upload_id' not in data:
+#         return jsonify({'error': 'upload_id is required'}), 400
+#     upload_id = data['upload_id']
+
+#     info = upload_status.get(upload_id)
+#     if not info:
+#         return jsonify({'error': 'Invalid or unknown upload_id'}), 404
+#     file_path = info.get('filepath')
+
+#     # doc_id => unique filename
+#     doc_id = os.path.basename(file_path)
+
+#     # Delete file from disk
+#     try:
+#         os.remove(file_path)
+#     except Exception as e:
+#         return jsonify({'error': f'Failed to delete file from disk: {str(e)}'}), 500
+
+#     # Possibly remove from LlamaIndex
+#     project_name = data.get("project_name")
+#     PERSIST_DIR = os.path.join("./storage", project_name) if project_name else "./storage"
+
+#     if os.path.exists(PERSIST_DIR):
+#         try:
+#             storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
+#             index = load_index_from_storage(storage_context)
+#             index.delete_ref_doc(doc_id, delete_from_docstore=True)
+#             index.storage_context.persist(persist_dir=PERSIST_DIR)
+#         except Exception as e:
+#             return jsonify({'error': f'Failed to delete doc from index: {str(e)}'}), 500
+
+#     # Remove from our dictionary
+#     del upload_status[upload_id]
+#     return jsonify({'message': f'Document with id {upload_id} deleted successfully.'}), 200
+
+# ######################################
+# # Helper: capture_document_photo
+# ######################################
+# def capture_document_photo(camera_index=1, output_filename="captured_document.jpg", project_id="project_1"):
+#     print(f"[DEBUG] Attempting to open camera at index={camera_index}")
+#     try:
+#         cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+#     except Exception as e:
+#         raise RuntimeError(f"Could not initialize camera (index={camera_index}). Original error: {str(e)}")
+
+#     if not cap.isOpened():
+#         raise PermissionError(
+#             f"[DEBUG] Failed to open camera index={camera_index}. "
+#             "Check if device is connected and user has correct permissions."
+#         )
+
+#     desired_width = 3264
+#     desired_height = 2448
+#     cap.set(cv2.CAP_PROP_FRAME_WIDTH, desired_width)
+#     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, desired_height)
+
+#     wait_time = 5
+#     print(f"[DEBUG] Waiting {wait_time} seconds for the camera to adjust...")
+#     time.sleep(wait_time)
+
+#     attempts = 5
+#     frame = None
+#     for attempt in range(1, attempts + 1):
+#         ret, frame = cap.read()
+#         if ret and frame is not None:
+#             print(f"[DEBUG] Successfully grabbed frame on attempt {attempt}.")
+#             break
+#         print(f"[DEBUG] Attempt {attempt}/{attempts} failed. Retrying in 1s...")
+#         time.sleep(1)
+
+#     if frame is None:
+#         cap.release()
+#         raise RuntimeError(
+#             f"[DEBUG] Camera (index={camera_index}) open but no frame after {attempts} attempts."
+#         )
+
+#     directory = os.path.abspath(os.path.join(
+#         os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+#     ))
+#     try:
+#         os.makedirs(directory, exist_ok=True)
+#     except OSError as e:
+#         cap.release()
+#         raise OSError(
+#             f"[DEBUG] Failed to create/access directory '{directory}'. Original error: {str(e)}"
+#         )
+
+#     output_path = os.path.join(directory, output_filename)
+#     success = cv2.imwrite(output_path, frame)
+#     cap.release()
+
+#     if not success:
+#         raise OSError(
+#             f"[DEBUG] OpenCV could not write file '{output_path}'. Check disk space & permissions."
+#         )
+
+#     print(f"[DEBUG] Photo saved to {output_path}")
+#     return output_filename
+
+# ######################################
+# if __name__ == '__main__':
+#     app.run(host="127.0.0.1", debug=True, port=5000)
+
+## NEWER COMBINED BACKEND ##
 import os
 import uuid
-import threading
-import time
 import shutil
-import cv2
-import usb.core
-import usb.util
 import subprocess
 import yaml
 from dotenv import load_dotenv
-
 from flask import Flask, request, jsonify
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
 
 # For LlamaIndex operations
 from llama_index.core import StorageContext, load_index_from_storage
 
+######################################
+# Flask Setup
+######################################
 app = Flask(__name__)
 CORS(app)
 
 ######################################
 # Paths and Directories
 ######################################
-UPLOAD_FOLDER = 'C:/tmp/uploads'  # The initial "processing" folder
+UPLOAD_FOLDER = 'C:/tmp/uploads'  # Initial folder for incoming files
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Final folder structure for processed uploads:
-# FYDP/frontend/projects/<conversationId>/
+# The final folder structure: FYDP/frontend/projects/<conversationId>/
 BASE_PROJECTS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "frontend", "projects")
+    os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "projects")
 )
 
 ######################################
-# In-memory dictionary for upload statuses
+# In-Memory Dictionaries
 ######################################
+# uploaded_files[upload_id] = [ tmp_path, original_filename ]
+uploaded_files = {}
+
+# user_config => holds LLM/vector store/API keys from /set_config
+# Example:
+# {
+#   "llm": "openai",
+#   "vector_store": "local",
+#   "openai_api_key": "xxx",
+#   "cohere_api_key": "yyy",
+#   ...
+# }
+user_config = {}
+
 # upload_status[upload_id] = {
-#   'event': threading.Event(),
 #   'status': 'processing'|'finished'|'error',
 #   'error': None or str,
 #   'filepath': "<tmp file path>",
@@ -639,7 +1018,7 @@ BASE_PROJECTS_DIR = os.path.abspath(
 upload_status = {}
 
 ######################################
-# Helper: Load config for /delete
+# Helper: Load config (for /delete)
 ######################################
 def load_config(config_path="config.yaml"):
     with open(config_path, "r") as file:
@@ -647,18 +1026,43 @@ def load_config(config_path="config.yaml"):
     return config
 
 ######################################
-# /upload endpoint
+# /set_config => store user config
+######################################
+@app.route('/set_config', methods=['POST'])
+def set_config():
+    """
+    Expected JSON keys:
+      - llm (string, e.g. "openai" or "cohere")
+      - vector_store (string, e.g. "local", "chroma", "pinecone")
+      - openai_api_key, cohere_api_key, pinecone_api_key, etc. (optional)
+    """
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No configuration provided'}), 400
+    global user_config
+    user_config = data
+    return jsonify({
+        'message': 'Configuration updated successfully.',
+        'config': user_config
+    }), 200
+
+######################################
+# /upload => new approach (no event/thread)
 ######################################
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """
-    1. Expects 'file' in request.files
-    2. Expects 'conversation_id' in request.form
-    3. Saves file to tmp folder => starts background thread => copies file to final folder
-    4. Returns { upload_id }
+    Expects:
+      - request.files['file']
+      - request.form['conversation_id']
+    Saves file to C:/tmp/uploads/<upload_id>_<filename>,
+    sets status='finished' immediately,
+    copies file to /projects/<conversation_id>/<upload_id>_<filename>,
+    returns { upload_id }.
     """
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
@@ -673,9 +1077,9 @@ def upload_file():
     tmp_path = os.path.join(UPLOAD_FOLDER, unique_filename)
     file.save(tmp_path)
 
-    event = threading.Event()
+    # Track in both dictionaries
+    uploaded_files[upload_id] = [tmp_path, original_filename]
     upload_status[upload_id] = {
-        'event': event,
         'status': 'processing',
         'error': None,
         'filepath': tmp_path,
@@ -683,11 +1087,9 @@ def upload_file():
         'final_filename': unique_filename
     }
 
+    # Immediately mark as 'finished' and copy to final location
     try:
-        # Simulate or do time-consuming processing
         upload_status[upload_id]['status'] = 'finished'
-
-        # Copy file to final location in /projects/<conversation_id>/
         conv_folder = os.path.join(BASE_PROJECTS_DIR, conversation_id)
         os.makedirs(conv_folder, exist_ok=True)
         final_path = os.path.join(conv_folder, unique_filename)
@@ -695,18 +1097,16 @@ def upload_file():
     except Exception as e:
         upload_status[upload_id]['status'] = 'error'
         upload_status[upload_id]['error'] = str(e)
-    finally:
-        event.set()
 
     return jsonify({'upload_id': upload_id}), 200
 
 ######################################
-# /status/<upload_id> endpoint
+# /status/<upload_id>
 ######################################
 @app.route('/status/<upload_id>', methods=['GET'])
 def get_status(upload_id):
     """
-    Check the status of a given upload (processing, finished, error)
+    Check the status of a given upload
     """
     info = upload_status.get(upload_id)
     if not info:
@@ -717,74 +1117,136 @@ def get_status(upload_id):
     }), 200
 
 ######################################
-# /execute endpoint => Real AI logic
+# /execute => Real AI logic with user_config
 ######################################
 @app.route('/execute', methods=['POST'])
 def execute_command():
     """
-    Expects JSON: { text, upload_id }
-    1. Waits for background upload to finish
-    2. If success, calls rag.py with final file path => returns rag.py stdout
-    3. If rag.py fails, return error
+    Expects JSON: { "text": <query>, "upload_id": <some_id> }
+    1) Looks up final path from upload_status
+    2) If status != 'finished', error
+    3) Uses user_config for vector_store/llm
+    4) Calls rag.py with environment vars
     """
     data = request.json
-    text = data.get('text')
-    upload_id = data.get('upload_id')
-    if not text or upload_id is None:
-        return jsonify({'error': 'No text or upload_id provided'}), 400
+    if 'text' not in data or 'upload_id' not in data:
+        return jsonify({'error': 'Both "text" and "upload_id" are required'}), 400
+
+    text = data['text']
+    upload_id = data['upload_id']
 
     info = upload_status.get(upload_id)
     if not info:
         return jsonify({'error': 'Invalid upload_id'}), 404
 
-    # Wait for the background "processing" to finish
-    info['event'].wait()
     if info['status'] == 'error':
         return jsonify({'error': info['error']}), 400
     if info['status'] != 'finished':
         return jsonify({'error': 'Processing not finished'}), 400
 
-    # Build the final path
     conversation_id = info['conversation_id']
     unique_filename = info['final_filename']
     final_path = os.path.join(BASE_PROJECTS_DIR, conversation_id, unique_filename)
 
-    # Call rag.py
-    cmd = [
-        "python", "rag.py",
-        "--file", final_path,
-        "--query", text
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # Grab vector_store & llm from user_config
+    vector_store = user_config.get("vector_store", "local")
+    llm_choice = user_config.get("llm", "openai")
 
+    # Build command => e.g. rag.py or rag_temp.py
+    cmd = [
+        "python", "rag_temp.py",  # or "rag_temp.py" if you want
+        "--file", final_path,
+        "--query", text,
+        "--vector_store", vector_store,
+        "--llm", llm_choice
+    ]
+
+    # Prepare environment with any API keys
+    env = os.environ.copy()
+    if "openai_api_key" in user_config:
+        env["OPENAI_API_KEY"] = user_config["openai_api_key"]
+    if "cohere_api_key" in user_config:
+        env["COHERE_API_KEY"] = user_config["cohere_api_key"]
+    if "pinecone_api_key" in user_config:
+        env["PINECONE_API_KEY"] = user_config["pinecone_api_key"]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if result.returncode != 0:
-        # Return error from rag.py
         err_msg = result.stderr.strip() or "Error running rag.py"
         print("Error output:", err_msg)
         return jsonify({'error': err_msg}), 400
 
-    # Return AI response from rag.py
     output = result.stdout.strip()
     return jsonify({'output': output}), 200
 
 ######################################
-# /capture-document endpoint
+# /delete => remove file & doc from LlamaIndex
+######################################
+@app.route('/delete', methods=['POST'])
+def delete_file():
+    """
+    Expects JSON with "upload_id" (and optionally "project_name").
+    Looks up file path from upload_status, removes from disk,
+    optionally from LlamaIndex if PERSIST_DIR is found.
+    """
+    config = load_config()
+    load_dotenv()
+    os.environ["OPENAI_API_KEY"] = config['api_key']['OPEN_AI']
+
+    data = request.json
+    if 'upload_id' not in data:
+        return jsonify({'error': 'upload_id is required'}), 400
+    upload_id = data['upload_id']
+
+    info = upload_status.get(upload_id)
+    if not info:
+        return jsonify({'error': 'Invalid or unknown upload_id'}), 404
+
+    file_path = info.get('filepath')
+    doc_id = os.path.basename(file_path)
+
+    # Delete from disk
+    try:
+        os.remove(file_path)
+    except Exception as e:
+        return jsonify({'error': f'Failed to delete file from disk: {str(e)}'}), 500
+
+    # Possibly remove from LlamaIndex
+    project_name = data.get("project_name")
+    PERSIST_DIR = os.path.join("./storage", project_name) if project_name else "./storage"
+    if os.path.exists(PERSIST_DIR):
+        try:
+            storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
+            index = load_index_from_storage(storage_context)
+            index.delete_ref_doc(doc_id, delete_from_docstore=True)
+            index.storage_context.persist(persist_dir=PERSIST_DIR)
+        except Exception as e:
+            return jsonify({'error': f'Failed to delete doc from index: {str(e)}'}), 500
+
+    # Remove from dictionaries
+    del upload_status[upload_id]
+    if upload_id in uploaded_files:
+        del uploaded_files[upload_id]
+
+    return jsonify({'message': f'Document with upload_id {upload_id} deleted successfully.'}), 200
+
+######################################
+# Additional endpoints (unchanged)
 ######################################
 @app.route("/capture-document", methods=["POST"])
 def capture_document():
     """
     Expects JSON: { camera_index, output_filename, project_id, should_clean }
-    Captures image from camera => saves to /projects/<project_id>/new_pdf/
     """
     data = request.get_json(force=True)
-    camera_index = data.get("camera_index", 1)
+    camera_index = data.get("camera_index", 0)
     output_filename = data.get("output_filename", "captured_document.jpg")
     project_id = data.get("project_id", "project_1")
     should_clean = data.get("should_clean", "")
 
     if should_clean == "clean":
         directory = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+            os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id, 'new_pdf'
         ))
         if os.path.exists(directory):
             for filename in os.listdir(directory):
@@ -798,15 +1260,12 @@ def capture_document():
                     print(f"[DEBUG] Failed to delete {file_path}. Reason: {str(e)}")
 
     try:
-        saved_path = capture_document_photo(camera_index, output_filename, project_id)
+        saved_path = capture_document_photo(0, output_filename, project_id) # camera_index as first argument instead of 0
         return jsonify({"path": saved_path}), 200
     except Exception as e:
         error_msg = f"Capture failed: {str(e)}"
         return jsonify({"error": error_msg}), 500
 
-######################################
-# /capture-to-pdf endpoint
-######################################
 @app.route("/capture-to-pdf", methods=["POST"])
 def create_pdf():
     data = request.get_json()
@@ -815,16 +1274,15 @@ def create_pdf():
     pdf_filename = data.get('pdf_filename', 'output.pdf')
 
     directory = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id, 'new_pdf'
     ))
     pdf_dir = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'projects', project_id
+        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id
     ))
     os.makedirs(pdf_dir, exist_ok=True)
     pdf_path = os.path.join(pdf_dir, pdf_filename)
 
     try:
-        # Use image size 3264x2448
         from reportlab.pdfgen import canvas
         from reportlab.lib.pagesizes import letter
         img_width, img_height = 3264, 2448
@@ -846,59 +1304,13 @@ def create_pdf():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-######################################
-# /delete endpoint
-######################################
-@app.route('/delete', methods=['POST'])
-def delete_file():
-    # Load config & set OPENAI_API_KEY
-    config = load_config()
-    load_dotenv()
-    os.environ["OPENAI_API_KEY"] = config['api_key']['OPEN_AI']
+def capture_document_photo(camera_index=0, output_filename="captured_document.jpg", project_id="project_1"):
+    import cv2
+    import time
 
-    data = request.json
-    if 'upload_id' not in data:
-        return jsonify({'error': 'upload_id is required'}), 400
-    upload_id = data['upload_id']
-
-    info = upload_status.get(upload_id)
-    if not info:
-        return jsonify({'error': 'Invalid or unknown upload_id'}), 404
-    file_path = info.get('filepath')
-
-    # doc_id => unique filename
-    doc_id = os.path.basename(file_path)
-
-    # Delete file from disk
-    try:
-        os.remove(file_path)
-    except Exception as e:
-        return jsonify({'error': f'Failed to delete file from disk: {str(e)}'}), 500
-
-    # Possibly remove from LlamaIndex
-    project_name = data.get("project_name")
-    PERSIST_DIR = os.path.join("./storage", project_name) if project_name else "./storage"
-
-    if os.path.exists(PERSIST_DIR):
-        try:
-            storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
-            index = load_index_from_storage(storage_context)
-            index.delete_ref_doc(doc_id, delete_from_docstore=True)
-            index.storage_context.persist(persist_dir=PERSIST_DIR)
-        except Exception as e:
-            return jsonify({'error': f'Failed to delete doc from index: {str(e)}'}), 500
-
-    # Remove from our dictionary
-    del upload_status[upload_id]
-    return jsonify({'message': f'Document with id {upload_id} deleted successfully.'}), 200
-
-######################################
-# Helper: capture_document_photo
-######################################
-def capture_document_photo(camera_index=1, output_filename="captured_document.jpg", project_id="project_1"):
     print(f"[DEBUG] Attempting to open camera at index={camera_index}")
     try:
-        cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+        cap = cv2.VideoCapture(camera_index) # cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW) for Windows
     except Exception as e:
         raise RuntimeError(f"Could not initialize camera (index={camera_index}). Original error: {str(e)}")
 
@@ -934,15 +1346,9 @@ def capture_document_photo(camera_index=1, output_filename="captured_document.jp
         )
 
     directory = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'projects', project_id, 'new_pdf'
+        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id, 'new_pdf'
     ))
-    try:
-        os.makedirs(directory, exist_ok=True)
-    except OSError as e:
-        cap.release()
-        raise OSError(
-            f"[DEBUG] Failed to create/access directory '{directory}'. Original error: {str(e)}"
-        )
+    os.makedirs(directory, exist_ok=True)
 
     output_path = os.path.join(directory, output_filename)
     success = cv2.imwrite(output_path, frame)
@@ -959,4 +1365,3 @@ def capture_document_photo(camera_index=1, output_filename="captured_document.jp
 ######################################
 if __name__ == '__main__':
     app.run(host="127.0.0.1", debug=True, port=5000)
-

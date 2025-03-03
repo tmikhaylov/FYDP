@@ -332,7 +332,7 @@ z"
 
 export function NamedLogoWithLink() {
   return (
-    <Link href="/" className="flex flex-row items-center gap-3">
+    <Link href="/project" className="flex flex-row items-center gap-3">
       <Logo height="100" width="100" />
       <h3 className="font-semibold text-xl">ScanKit</h3>
     </Link>

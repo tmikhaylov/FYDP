@@ -1,4 +1,3 @@
-// components/ChatPage.tsx
 "use client";
 import { useState, useEffect, FormEvent, ChangeEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -18,7 +17,21 @@ type Message = {
   attachments?: string[];
 };
 
-export default function ChatPage({ projectId, chatId, initialMessages }: { projectId: string; chatId: string; initialMessages: Message[] }) {
+type AttachmentItem = {
+  file: File;
+  upload_id?: string;
+  filename?: string;
+};
+
+export default function ChatPage({
+  projectId,
+  chatId,
+  initialMessages,
+}: {
+  projectId: string;
+  chatId: string;
+  initialMessages: Message[];
+}) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [showModal, setShowModal] = useState(false);
   const [captureIndex, setCaptureIndex] = useState(0);
@@ -27,20 +40,25 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
   const [progress, setProgress] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
-
+  
   const router = useRouter();
   const { toast } = useToast();
-
+  
   function handleNewMessage(question: string, attachments: string[]): string {
     const tempId = generateRandomId(8);
-    setMessages((prev) => [...prev, { id: tempId, question, answer: "Thinking...", attachments }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: tempId, question, answer: "Thinking...", attachments },
+    ]);
     return tempId;
   }
-
+  
   function handleUpdateAnswer(tempId: string, finalAnswer: string) {
-    setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, answer: finalAnswer } : m)));
+    setMessages((prev) =>
+      prev.map((m) => (m.id === tempId ? { ...m, answer: finalAnswer } : m))
+    );
   }
-
+  
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isLoading) {
@@ -55,7 +73,8 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
       if (timer) clearInterval(timer);
     };
   }, [isLoading]);
-
+  
+  // Modified uploadFile returns an object with upload_id and filename.
   async function uploadFile(file: File) {
     const formData = new FormData();
     formData.append("file", file);
@@ -66,9 +85,11 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
     });
     if (!res.ok) throw new Error("File upload failed");
     const data = await res.json();
-    return data.upload_id;
+    const getRes = await fetch(`http://127.0.0.1:5000/get_filename/${data.upload_id}`);
+    const getData = await getRes.json();
+    return { upload_id: data.upload_id, filename: getData.filename };
   }
-
+  
   async function callExecute(text: string, uploadId?: string) {
     const body = { text, project_id: projectId, upload_id: uploadId };
     const execRes = await fetch("http://127.0.0.1:5000/execute", {
@@ -83,7 +104,7 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
     const execData = await execRes.json();
     return execData.output || "No answer";
   }
-
+  
   async function patchConversation(question: string, answer: string, attachments: string[]) {
     const res = await fetch(`/api/conversation/${chatId}`, {
       method: "PATCH",
@@ -92,7 +113,7 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
     });
     if (!res.ok) throw new Error("Updating conversation in DB failed");
   }
-
+  
   async function captureDocumentPhoto(clean = "") {
     const outputFilename = `captured_document_${captureIndex}.jpg`;
     const res = await fetch("http://127.0.0.1:5000/capture-document", {
@@ -111,7 +132,7 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
     setCaptureIndex((prev) => prev + 1);
     return data.upload_id;
   }
-
+  
   async function createPdf() {
     try {
       await fetch("http://127.0.0.1:5000/capture-to-pdf", {
@@ -127,7 +148,7 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
       console.error("Error creating PDF:", error);
     }
   }
-
+  
   async function startVoiceRecording() {
     const res = await fetch("http://127.0.0.1:5000/start-recording", { method: "POST" });
     if (!res.ok) {
@@ -136,7 +157,7 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
     }
     setIsRecording(true);
   }
-
+  
   async function stopVoiceRecording() {
     const res = await fetch("http://127.0.0.1:5000/stop-recording", { method: "POST" });
     if (!res.ok) {
@@ -147,29 +168,54 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
     setIsRecording(false);
     setVoiceTranscript(data.transcript);
   }
-
+  
   function ChatInput() {
     const [message, setMessage] = useState("");
-    const [files, setFiles] = useState<File[]>([]);
+    const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
     const formRef = useRef<HTMLFormElement>(null);
-
+  
     async function handleSubmit(e: FormEvent<HTMLFormElement>) {
       e.preventDefault();
-      if (!message && files.length === 0 && !voiceTranscript) return;
-      const attachments: string[] = files.map((f) => f.name);
-      const tempId = handleNewMessage(message || voiceTranscript, attachments);
+      if (!message && attachments.length === 0 && !voiceTranscript) return;
+      // extract attachment filenames for message record
+      const attachmentNames = attachments.map((att) => att.file.name);
+      const tempId = handleNewMessage(message || voiceTranscript, attachmentNames);
       try {
         setIsLoading(true);
         let uploadId: string | undefined;
-        if (files.length > 0) {
-          uploadId = await uploadFile(files[0]);
+        // If there is at least one attachment, process the first one.
+        if (attachments.length > 0) {
+          let att = attachments[0];
+          // If not yet uploaded, then upload it.
+          if (!att.upload_id) {
+            const uploadResult = await uploadFile(att.file);
+            uploadId = uploadResult.upload_id;
+            // Update the attachment with upload details
+            att = { ...att, upload_id: uploadResult.upload_id, filename: uploadResult.filename };
+            setAttachments((prev) => {
+              const newArr = [...prev];
+              newArr[0] = att;
+              return newArr;
+            });
+            // Call the DB API to add the file record into the database
+            const dbRes = await fetch(`/api/project/${projectId}/db-files`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ upload_id: uploadResult.upload_id, filename: uploadResult.filename }),
+            });
+            if (!dbRes.ok) {
+              throw new Error("Failed to update database with file info");
+            }
+          } else {
+            uploadId = att.upload_id;
+          }
         }
         const finalText = message || voiceTranscript;
         const finalAnswer = await callExecute(finalText, uploadId);
-        await patchConversation(finalText, finalAnswer, attachments);
+        await patchConversation(finalText, finalAnswer, attachmentNames);
         handleUpdateAnswer(tempId, finalAnswer);
         setMessage("");
-        setFiles([]);
+        setAttachments([]);
         setVoiceTranscript("");
       } catch (err: any) {
         toast({
@@ -182,17 +228,32 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
         router.refresh();
       }
     }
-
-    function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+  
+    async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
       if (!e.target.files) return;
-      const newFiles = Array.from(e.target.files);
-      setFiles((prev) => [...prev, ...newFiles]);
+      const newFiles = Array.from(e.target.files).map((file) => ({ file }));
+      setAttachments((prev) => [...prev, ...newFiles]);
     }
-
-    function removeFile(index: number) {
-      setFiles((prev) => prev.filter((_, i) => i !== index));
+  
+    async function removeAttachment(index: number) {
+      const attachment = attachments[index];
+      // Remove from state immediately
+      setAttachments((prev) => prev.filter((_, i) => i !== index));
+      // If the attachment was already uploaded, call the deletion APIs.
+      if (attachment.upload_id) {
+        // External deletion API
+        await fetch("http://127.0.0.1:5000/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ upload_id: attachment.upload_id, project_id: projectId }),
+        });
+        // Frontend API to remove the record from the DB
+        await fetch(`/api/project/${projectId}/db-files?fileId=${attachment.upload_id}`, {
+          method: "DELETE",
+        });
+      }
     }
-
+  
     return (
       <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-2">
         {isLoading && (
@@ -254,12 +315,12 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
           />
           <Submit disabled={isLoading} />
         </div>
-        {files.length > 0 && (
+        {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
-            {files.map((file, index) => (
+            {attachments.map((att, index) => (
               <div key={index} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg">
-                <span className="text-sm truncate max-w-[200px]">{file.name}</span>
-                <button type="button" onClick={() => removeFile(index)} className="text-red-500 text-xl">
+                <span className="text-sm truncate max-w-[200px]">{att.file.name}</span>
+                <button type="button" onClick={() => removeAttachment(index)} className="text-red-500 text-xl">
                   &times;
                 </button>
               </div>
@@ -269,7 +330,7 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
       </form>
     );
   }
-
+  
   return (
     <div className="flex flex-col min-h-screen w-full bg-background">
       <div className="flex-1 overflow-y-auto p-4 sm:w-[95%] mx-auto">
@@ -278,7 +339,11 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
             {msg.attachments && msg.attachments.length > 0 && (
               <div className="flex gap-2 flex-wrap mb-1 justify-end">
                 {msg.attachments.map((filename, idx) => (
-                  <div key={idx} className="bg-white dark:bg-slate-600 text-sm text-black dark:text-white px-2 py-1 rounded border border-gray-300 dark:border-slate-500 max-w-[200px] truncate" title={filename}>
+                  <div
+                    key={idx}
+                    className="bg-white dark:bg-slate-600 text-sm text-black dark:text-white px-2 py-1 rounded border border-gray-300 dark:border-slate-500 max-w-[200px] truncate"
+                    title={filename}
+                  >
                     📎 {filename}
                   </div>
                 ))}
@@ -315,13 +380,41 @@ export default function ChatPage({ projectId, chatId, initialMessages }: { proje
             <div>
               <div className="grid grid-cols-3 gap-2">
                 {capturedImages.map((filename, idx) => (
-                  <Image key={idx} src={`/projects/${projectId}/${filename}`} alt={`Captured ${filename}`} className="w-full h-auto border rounded mb-2" width={100} height={100} />
+                  <Image
+                    key={idx}
+                    src={`/projects/${projectId}/${filename}`}
+                    alt={`Captured ${filename}`}
+                    className="w-full h-auto border rounded mb-2"
+                    width={100}
+                    height={100}
+                  />
                 ))}
               </div>
-              <button type="button" onClick={async () => { try { await captureDocumentPhoto(); } catch (error) { console.error(error); } }} className="mb-0 mr-2 px-4 py-2 bg-blue-500 text-white rounded">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await captureDocumentPhoto();
+                  } catch (error) {
+                    console.error(error);
+                  }
+                }}
+                className="mb-0 mr-2 px-4 py-2 bg-blue-500 text-white rounded"
+              >
                 Scan another image
               </button>
-              <button type="button" onClick={async () => { try { await createPdf(); setShowModal(false); } catch (error) { console.error(error); } }} className="mb-0 px-4 py-2 bg-blue-500 text-white rounded">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await createPdf();
+                    setShowModal(false);
+                  } catch (error) {
+                    console.error(error);
+                  }
+                }}
+                className="mb-0 px-4 py-2 bg-blue-500 text-white rounded"
+              >
                 Save as PDF
               </button>
             </div>

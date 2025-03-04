@@ -1,3 +1,4 @@
+// lib/auth.ts
 import { AuthOptions, DefaultSession, getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import prisma from "../prisma/client";
@@ -28,6 +29,12 @@ export const authConfig: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
+    // Set session max age to 4 hours
+    maxAge: 100000, // 4 * 60 * 60 seconds
+  },
+  jwt: {
+    // Also set JWT max age to 4 hours
+    maxAge: 100000,
   },
   callbacks: {
     jwt: async ({ token }) => {

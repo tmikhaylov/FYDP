@@ -1841,6 +1841,7 @@ from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from llama_index.core import StorageContext, load_index_from_storage
 import openai
+from openai import OpenAI
 import threading
 import wave
 import pyaudio
@@ -1930,13 +1931,15 @@ def stop_recording():
     wf.writeframes(b"".join(frames))
     wf.close()
     p.terminate()
+
+    client = OpenAI()
     try:
         with open(TEMP_WAV_PATH, "rb") as audio_file:
-            transcript = openai.Audio.transcribe("whisper-1", audio_file)
+            transcript = client.audio.transcriptions.create(model="whisper-1", file=audio_file, response_format="text")
     except Exception as e:
         print(str(e))
         return jsonify({"error": "OpenAI Whisper API call failed", "details": str(e)}), 500
-    recognized_text = transcript.get("text", "")
+    recognized_text = transcript
     return jsonify({
         "message": "Recording stopped. Transcription complete.",
         "transcript": recognized_text
@@ -2019,7 +2022,9 @@ def execute_command():
         "--llm", user_config.get("llm", "openai"),
         "--chat"
     ]
+    have_file = False
     if upload_id:
+        have_file = True
         file_info = uploaded_files.get(upload_id)
         if not file_info:
             return jsonify({'error': 'Invalid or unknown upload_id'}), 404
@@ -2035,7 +2040,11 @@ def execute_command():
     if result.returncode != 0:
         err_msg = result.stderr.strip() or "Error running rag_temp.py"
         return jsonify({'error': err_msg}), 400
-    output = '\n'.join(result.stdout.strip().splitlines())
+    if have_file:
+        output = result.stdout.strip().splitlines()[1:]
+    else:
+        output = result.stdout.strip().splitlines()
+    output = '\n'.join(output)
     return jsonify({'output': output}), 200
 
 @app.route('/delete', methods=['POST'])

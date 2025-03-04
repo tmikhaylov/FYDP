@@ -47,10 +47,10 @@ export default function NewChatModal({ projectId }: { projectId: string }) {
               className="w-full mb-4 p-2 rounded border dark:bg-gray-800 dark:text-white"
             />
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-800">
+              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-400">
                 Cancel
               </button>
-              <button onClick={handleCreateChat} className="px-3 py-1 bg-sky-500 text-white rounded">
+              <button onClick={handleCreateChat} className="px-3 py-1 bg-sky-600 text-white rounded hover:bg-sky-500">
                 Create Chat
               </button>
             </div>

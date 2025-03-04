@@ -1,4 +1,4 @@
-// components/navbar.tsx
+// components/navbar.tsx (Server Component - no "use client")
 import { NamedLogoWithLink } from "./logo";
 import ToggleTheme from "./toggle";
 import NewChatModal from "./NewChatModal";
@@ -10,14 +10,13 @@ interface NavbarProps {
   projectId?: string;
 }
 
-// Server component (no "use client")
 export default function Navbar({ projectName, chatName, projectId }: NavbarProps) {
   return (
     <nav className="w-full flex flex-row items-center justify-between h-24 sm:mb-7 top-0 sticky bg-background px-4">
       <div className="flex items-center gap-4">
         <NamedLogoWithLink />
         {(projectName || chatName) && (
-          <span className="ml-2 text-sm text-gray-600">
+          <span className="ml-2 text-sm text-gray-400">
             {projectName && `Project: ${projectName}`} 
             {projectName && chatName && " | "} 
             {chatName && `Chat: ${chatName}`}

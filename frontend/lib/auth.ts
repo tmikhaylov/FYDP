@@ -28,25 +28,32 @@ export const authConfig: AuthOptions = {
   ],
   adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "jwt",
-    // Set session max age to 4 hours
-    maxAge: 100000, // 4 * 60 * 60 seconds
+    strategy: "jwt",  // Make sure JWT is the session strategy
+    maxAge: 60 * 60 * 40, // 4 hours (in seconds)
+    updateAge: 60 * 60 * 10,  // Refresh every 30 minutes (in seconds)
   },
   jwt: {
-    // Also set JWT max age to 4 hours
-    maxAge: 100000,
+    maxAge: 60 * 60 * 40, // JWT also lasts for 4 hours
   },
   callbacks: {
     jwt: async ({ token }) => {
-      const db_user = await prisma.user.findFirst({
-        where: {
-          email: token.email,
-        },
-      });
-      if (db_user) token.id = db_user.id;
+      if (!token.email) return token;
+
+      try {
+        const db_user = await prisma.user.findUnique({
+          where: { email: token.email },
+          select: { id: true }, // Select only ID to reduce DB calls
+        });
+
+        if (db_user) {
+          token.id = db_user.id;
+        }
+      } catch (error) {
+        console.error("JWT Callback Error:", error);
+      }
       return token;
     },
-    session: ({ token, session }) => {
+    session: ({ session, token }) => {
       if (token) {
         session.user.id = token.id;
         session.user.name = token.name;
@@ -57,6 +64,7 @@ export const authConfig: AuthOptions = {
     },
   },
 };
+
 
 export async function getUser() {
   return await getServerSession(authConfig);

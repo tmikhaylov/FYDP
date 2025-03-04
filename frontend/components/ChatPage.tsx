@@ -358,21 +358,26 @@ export default function ChatPage({
 
             {/* Voice record */}
             <button
-              type="button"
-              onClick={async () => {
-                try {
-                  if (!isRecording) {
-                    await startVoiceRecording();
-                  } else {
-                    await stopVoiceRecording();
-                  }
-                } catch (error) {
-                  console.error(error);
-                }
-              }}
-              className="flex items-center justify-center text-xl text-sky-500 cursor-pointer"
+                type="button"
+                onClick={async () => {
+                    try {
+                    if (!isRecording) {
+                        await startVoiceRecording();
+                    } else {
+                        await stopVoiceRecording();
+                    }
+                    } catch (error) {
+                    console.error(error);
+                    }
+                }}
+                className={`flex items-center justify-center text-xl ${
+                    isRecording ? "text-red-500 animate-pulse" : "text-sky-500"
+                } cursor-pointer relative`}
             >
-              <MdKeyboardVoice className="w-10 h-10 p-2" />
+                <MdKeyboardVoice className="w-10 h-10 p-2" />
+                {isRecording && (
+                    <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                )}
             </button>
 
             {/* Text input */}

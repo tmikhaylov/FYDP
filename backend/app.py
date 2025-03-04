@@ -2081,35 +2081,30 @@ def capture_document():
     output_filename = data.get("output_filename", "captured_document.jpg")
     project_id = data.get("project_id", "project_1")
     should_clean = data.get("should_clean", "")
+
+    # If should_clean == "clean", remove any leftover images from a previous session
+    project_folder = os.path.join(BASE_PROJECTS_DIR, project_id)
+    os.makedirs(project_folder, exist_ok=True)
     if should_clean == "clean":
-        directory = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id, 'new_pdf'
-        ))
-        if os.path.exists(directory):
-            for filename in os.listdir(directory):
-                file_path = os.path.join(directory, filename)
+        for filename in os.listdir(project_folder):
+            # For safety, only remove images with "captured_document_" in the name
+            if filename.startswith("captured_document_"):
+                file_path = os.path.join(project_folder, filename)
                 try:
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                    if os.path.isfile(file_path):
                         os.unlink(file_path)
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
                 except Exception as e:
                     print(f"[DEBUG] Failed to delete {file_path}. Reason: {str(e)}")
+
     try:
         saved_filename = capture_document_photo(camera_index, output_filename, project_id)
-        # Build final destination path for the captured image
-        project_folder = os.path.join(BASE_PROJECTS_DIR, project_id)
-        os.makedirs(project_folder, exist_ok=True)
-        unique_filename = f"{str(uuid.uuid4())}_{saved_filename}"
-        src_path = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id, 'new_pdf', saved_filename
-        ))
-        dest_path = os.path.join(project_folder, unique_filename)
-        shutil.move(src_path, dest_path)
-        # Save to in-memory mapping with original filename
+        # The capture_document_photo writes directly into the project folder
+        # We'll attach an upload_id for it
         upload_id = str(uuid.uuid4())
-        uploaded_files[upload_id] = [dest_path, saved_filename]
-        return jsonify({"upload_id": upload_id, "filename": unique_filename}), 200
+        final_path = os.path.join(project_folder, saved_filename)
+        # store in memory
+        uploaded_files[upload_id] = [final_path, saved_filename]
+        return jsonify({"upload_id": upload_id, "filename": saved_filename}), 200
     except Exception as e:
         return jsonify({"error": f"Capture failed: {str(e)}"}), 500
 
@@ -2119,11 +2114,14 @@ def capture_document_photo(camera_index=0, output_filename="captured_document.jp
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
         raise PermissionError(f"Failed to open camera index={camera_index}.")
+
+    # High resolution
     desired_width = 3264
     desired_height = 2448
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, desired_width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, desired_height)
     time.sleep(5)
+
     attempts = 5
     frame = None
     for attempt in range(1, attempts + 1):
@@ -2131,43 +2129,39 @@ def capture_document_photo(camera_index=0, output_filename="captured_document.jp
         if ret and frame is not None:
             break
         time.sleep(1)
-    if frame is None:
-        cap.release()
-        raise RuntimeError(f"Camera open but no frame after {attempts} attempts.")
-    directory = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id, 'new_pdf'
-    ))
-    os.makedirs(directory, exist_ok=True)
-    output_path = os.path.join(directory, output_filename)
-    success = cv2.imwrite(output_path, frame)
     cap.release()
+    if frame is None:
+        raise RuntimeError(f"Camera open but no frame after {attempts} attempts.")
+
+    # Save directly to the project folder
+    project_folder = os.path.join(BASE_PROJECTS_DIR, project_id)
+    os.makedirs(project_folder, exist_ok=True)
+    output_path = os.path.join(project_folder, output_filename)
+    success = cv2.imwrite(output_path, frame)
     if not success:
         raise OSError(f"OpenCV could not write file '{output_path}'.")
+
     return output_filename
 
 @app.route("/capture-to-pdf", methods=["POST"])
 def create_pdf():
     data = request.get_json()
     project_id = data.get('project_id')
-    images = data.get('images')
+    images = data.get('images', [])
     pdf_filename = data.get('pdf_filename', 'output.pdf')
 
-    directory = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id
-    ))
-    pdf_dir = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id
-    ))
-    os.makedirs(pdf_dir, exist_ok=True)
-    pdf_path = os.path.join(pdf_dir, pdf_filename)
+    project_folder = os.path.join(BASE_PROJECTS_DIR, project_id)
+    os.makedirs(project_folder, exist_ok=True)
+    pdf_path = os.path.join(project_folder, pdf_filename)
 
     try:
         from reportlab.pdfgen import canvas
         from reportlab.lib.pagesizes import letter
+        # Use the same size as your captured images (3264x2448) or letter
         img_width, img_height = 3264, 2448
         c = canvas.Canvas(pdf_path, pagesize=(img_width, img_height))
         for image in images:
-            image_path = os.path.join(directory, image)
+            image_path = os.path.join(project_folder, image)
             if os.path.exists(image_path):
                 c.setPageSize((img_width, img_height))
                 c.drawImage(image_path, 0, 0, width=img_width, height=img_height)
@@ -2175,9 +2169,21 @@ def create_pdf():
             else:
                 print(f"Warning: {image_path} does not exist. Skipping.")
         c.save()
+
+        # Remove the captured images right after PDF creation
+        for image in images:
+            image_path = os.path.join(project_folder, image)
+            if os.path.exists(image_path):
+                os.remove(image_path)
+                # Also remove from uploaded_files dictionary if present
+                for up_id, info in list(uploaded_files.items()):
+                    if info[0] == image_path:
+                        del uploaded_files[up_id]
+
         return jsonify({
             "message": "PDF created successfully",
-            "pdf_path": pdf_path.replace("\\", "/")
+            "pdf_path": pdf_path.replace("\\", "/"),  # for cross-platform
+            "pdf_filename": pdf_filename
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

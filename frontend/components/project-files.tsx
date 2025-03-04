@@ -1,8 +1,13 @@
-// components/project-files.tsx
 "use client";
 import { useState } from "react";
 
-export function ProjectFiles({ projectId, files: initialFiles }: { projectId: string; files: { id: string; filename: string; upload_id?: string }[] }) {
+export function ProjectFiles({
+  projectId,
+  files: initialFiles,
+}: {
+  projectId: string;
+  files: { id: string; filename: string; upload_id?: string }[];
+}) {
   const [showModal, setShowModal] = useState(false);
   const [fileList, setFileList] = useState(initialFiles);
 
@@ -23,6 +28,18 @@ export function ProjectFiles({ projectId, files: initialFiles }: { projectId: st
     const getRes = await fetch(`http://127.0.0.1:5000/get_filename/${data.upload_id}`);
     const getData = await getRes.json();
     const fileRecord = { id: data.upload_id, filename: getData.filename };
+
+    // NEW: Update the database with the new file info
+    const dbRes = await fetch(`/api/project/${projectId}/db-files`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ upload_id: data.upload_id, filename: getData.filename }),
+    });
+    if (!dbRes.ok) {
+      alert("Failed to update database");
+      return;
+    }
+
     setFileList((prev) => [...prev, fileRecord]);
   }
 
@@ -38,12 +55,24 @@ export function ProjectFiles({ projectId, files: initialFiles }: { projectId: st
       alert("Failed to delete file");
       return;
     }
+    // NEW: Remove the file record from the database
+    const dbRes = await fetch(`/api/project/${projectId}/db-files?fileId=${fileId}`, {
+      method: "DELETE",
+    });
+    if (!dbRes.ok) {
+      alert("Failed to update database");
+      return;
+    }
     setFileList((prev) => prev.filter((f) => f.id !== fileId));
   }
 
   return (
     <>
-      <button type="button" className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded" onClick={() => setShowModal(true)}>
+      <button
+        type="button"
+        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded"
+        onClick={() => setShowModal(true)}
+      >
         Project files
       </button>
 

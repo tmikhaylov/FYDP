@@ -1960,7 +1960,6 @@ def create_project():
     if 'project_id' not in data:
         return jsonify({'error': 'project_id is required'}), 400
     project_id = data['project_id']
-    print("I got this far")
     persist_dir = os.path.join("./storage", project_id)
     if os.path.exists(persist_dir):
         return jsonify({'error': 'Project already exists'}), 400

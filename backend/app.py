@@ -3,6 +3,7 @@ import uuid
 import shutil
 import subprocess
 import yaml
+import json  # added for JSON persistence
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
@@ -26,11 +27,37 @@ BASE_PROJECTS_DIR = os.path.abspath(
 )
 os.makedirs(BASE_PROJECTS_DIR, exist_ok=True)
 
+UPLOADS_JSON_PATH = "uploaded_files.json"  # file to persist uploaded_files
+
 ######################################
-# In-Memory Dictionaries
+# In-Memory Dictionaries with Persistence
 ######################################
-uploaded_files = {}  # mapping: upload_id -> [filepath, original_filename]
+def load_uploaded_files():
+    """Load uploaded file records from JSON file."""
+    if os.path.exists(UPLOADS_JSON_PATH):
+        try:
+            with open(UPLOADS_JSON_PATH, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+def save_uploaded_files():
+    """Save uploaded file records to JSON file."""
+    with open(UPLOADS_JSON_PATH, "w") as f:
+        json.dump(uploaded_files, f, indent=4)
+
+uploaded_files = load_uploaded_files()  # mapping: upload_id -> [filepath, original_filename]
 user_config = {}
+
+######################################
+# Reload JSON data on each request
+######################################
+@app.before_request
+def reload_uploaded_files():
+    global uploaded_files
+    # Always load the latest version from disk
+    uploaded_files = load_uploaded_files()
 
 ######################################
 # Helper: load_config
@@ -158,6 +185,7 @@ def upload_file():
     final_path = os.path.join(project_folder, unique_filename)
     file.save(final_path)
     uploaded_files[upload_id] = [final_path, filename]  # store actual filename
+    save_uploaded_files()  # update persistent file
     return jsonify({'upload_id': upload_id, 'filename': unique_filename, 'project_id': project_id}), 200
 
 @app.route('/get_filename/<upload_id>', methods=['GET'])
@@ -240,6 +268,7 @@ def delete_file():
         except Exception as e:
             return jsonify({'error': f'Failed to delete document from index: {str(e)}'}), 500
     del uploaded_files[upload_id]
+    save_uploaded_files()  # update persistent file after deletion
     return jsonify({'message': f'Document with upload_id {upload_id} deleted successfully.'}), 200
 
 @app.route("/delete-file-manual", methods=["POST"])

@@ -2145,7 +2145,7 @@ def create_pdf():
     pdf_filename = data.get('pdf_filename', 'output.pdf')
 
     directory = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id, 'new_pdf'
+        os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id
     ))
     pdf_dir = os.path.abspath(os.path.join(
         os.path.dirname(__file__), '..', 'frontend', 'public', 'projects', project_id

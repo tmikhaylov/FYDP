@@ -21,6 +21,7 @@ type AttachmentItem = {
   file: File;
   upload_id?: string;
   filename?: string;
+  scanned?: boolean; // marks if the attachment is from a scan
 };
 
 export default function ChatPage({
@@ -97,7 +98,7 @@ export default function ChatPage({
     const upload_id = data.upload_id;
     const filename = getData.filename;
 
-    // If it's a scanned PDF, remove the original once re-uploaded
+    // If it's a scanned PDF (legacy naming), remove the original once re-uploaded
     if (file.name.startsWith("scanned_pdf_")) {
       await fetch("http://127.0.0.1:5000/delete-file-manual", {
         method: "POST",
@@ -167,9 +168,38 @@ export default function ChatPage({
     const [capturedImages, setCapturedImages] = useState<string[]>([]);
     const [captureIndex, setCaptureIndex] = useState(0);
 
+    // States for live video capture preview
+    const [isCapturing, setIsCapturing] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+
     const formRef = useRef<HTMLFormElement>(null);
 
-    // Clean old images & capture new
+    // Start video stream when modal is open and capturing is enabled
+    useEffect(() => {
+      let stream: MediaStream;
+      if (showModal && isCapturing) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then((s) => {
+            stream = s;
+            setMediaStream(s);
+            if (videoRef.current) {
+              videoRef.current.srcObject = s;
+              videoRef.current.play();
+            }
+          })
+          .catch((err) => {
+            console.error("Error accessing camera:", err);
+          });
+      }
+      return () => {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+      };
+    }, [showModal, isCapturing]);
+
+    // Function to call /capture-document API to capture a document photo
     async function captureDocumentPhoto(clean = "") {
       const outputFilename = `captured_document_${captureIndex}.jpg`;
       const res = await fetch("http://127.0.0.1:5000/capture-document", {
@@ -189,16 +219,39 @@ export default function ChatPage({
       return data.upload_id;
     }
 
-    // Create PDF from captured images => attach as a File
+    // Handler for the Capture Image button – calls the /capture-document API
+    async function handleCapture() {
+      try {
+        const shouldClean = captureIndex === 0 ? "clean" : "";
+        await captureDocumentPhoto(shouldClean);
+        // Stop the video stream after capture
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          setMediaStream(null);
+        }
+        setIsCapturing(false);
+      } catch (error) {
+        console.error("Error capturing document:", error);
+      }
+    }
+
+    // Create PDF from captured images => attach as a File.
+    // Now, before creating the PDF, we prompt the user for a custom file name.
     async function createPdf() {
       try {
+        const customName = window.prompt("Give a name to this file scan", `scan_${Date.now()}`);
+        if (!customName) {
+          toast({ title: "Cancelled", description: "Scan cancelled: no name provided" });
+          return;
+        }
+        const pdfFilename = `${customName}.pdf`;
         const res = await fetch("http://127.0.0.1:5000/capture-to-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             project_id: projectId,
             images: capturedImages,
-            pdf_filename: `scanned_pdf_${Date.now()}.pdf`,
+            pdf_filename: pdfFilename,
           }),
         });
         if (!res.ok) {
@@ -206,21 +259,19 @@ export default function ChatPage({
           throw new Error(err.error || "Failed to create PDF");
         }
         const data = await res.json();
-        const pdfFilename = data.pdf_filename;
+        const finalPdfFilename = data.pdf_filename;
 
         // Retrieve PDF from server
-        const pdfUrl = `/projects/${projectId}/${pdfFilename}`;
+        const pdfUrl = `/projects/${projectId}/${finalPdfFilename}`;
         const pdfResponse = await fetch(pdfUrl);
         if (!pdfResponse.ok) {
           throw new Error("Failed to retrieve the PDF from the server");
         }
         const pdfBlob = await pdfResponse.blob();
 
-        // Wrap in a File object
-        const pdfFile = new File([pdfBlob], pdfFilename, { type: "application/pdf" });
-
-        // Add to attachments
-        setAttachments((prev) => [...prev, { file: pdfFile }]);
+        // Wrap in a File object and mark it as scanned
+        const pdfFile = new File([pdfBlob], finalPdfFilename, { type: "application/pdf" });
+        setAttachments((prev) => [...prev, { file: pdfFile, scanned: true }]);
       } catch (error) {
         console.error("Error creating PDF:", error);
         toast({
@@ -243,6 +294,7 @@ export default function ChatPage({
 
         let uploadId: string | undefined;
         if (attachments.length > 0) {
+          // Process only the first attachment for execution
           let att = attachments[0];
           if (!att.upload_id) {
             const uploadResult = await uploadFile(att.file);
@@ -278,7 +330,21 @@ export default function ChatPage({
         await patchConversation(finalText, finalAnswer, attachmentNames);
         handleUpdateAnswer(tempId, finalAnswer);
 
-        // Reset input
+        // Delete all scanned PDF attachments from storage (if any)
+        const scannedPdfAttachments = attachments.filter((att) => att.scanned);
+        if (scannedPdfAttachments.length > 0) {
+          await Promise.all(
+            scannedPdfAttachments.map((att) =>
+              fetch("http://127.0.0.1:5000/delete-file-manual", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ project_id: projectId, filename: att.file.name }),
+              })
+            )
+          );
+        }
+
+        // Reset input fields and attachments
         setMessage("");
         setAttachments([]);
         setVoiceTranscript("");
@@ -306,8 +372,15 @@ export default function ChatPage({
       const attachment = attachments[index];
       setAttachments((prev) => prev.filter((_, i) => i !== index));
 
-      // If it was uploaded, delete from server + DB
-      if (attachment.upload_id) {
+      // For scanned PDFs, call delete-file-manual to remove from storage
+      if (attachment.scanned) {
+        await fetch("http://127.0.0.1:5000/delete-file-manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project_id: projectId, filename: attachment.file.name }),
+        });
+      } else if (attachment.upload_id) {
+        // If it was uploaded (non-scanned attachment), delete from server + DB
         await fetch("http://127.0.0.1:5000/delete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -340,16 +413,11 @@ export default function ChatPage({
             {/* Webcam capture */}
             <button
               type="button"
-              onClick={async () => {
-                try {
-                  setCapturedImages([]);
-                  setCaptureIndex(0);
-                  // Clean old images, then capture a fresh one
-                  await captureDocumentPhoto("clean");
-                  setShowModal(true);
-                } catch (error) {
-                  console.error(error);
-                }
+              onClick={() => {
+                setCapturedImages([]);
+                setCaptureIndex(0);
+                setShowModal(true);
+                setIsCapturing(true);
               }}
               className="flex items-center justify-center text-xl text-sky-500 cursor-pointer"
             >
@@ -358,26 +426,26 @@ export default function ChatPage({
 
             {/* Voice record */}
             <button
-                type="button"
-                onClick={async () => {
-                    try {
-                    if (!isRecording) {
-                        await startVoiceRecording();
-                    } else {
-                        await stopVoiceRecording();
-                    }
-                    } catch (error) {
-                    console.error(error);
-                    }
-                }}
-                className={`flex items-center justify-center text-xl ${
-                    isRecording ? "text-red-500 animate-pulse" : "text-sky-500"
-                } cursor-pointer relative`}
+              type="button"
+              onClick={async () => {
+                try {
+                  if (!isRecording) {
+                    await startVoiceRecording();
+                  } else {
+                    await stopVoiceRecording();
+                  }
+                } catch (error) {
+                  console.error(error);
+                }
+              }}
+              className={`flex items-center justify-center text-xl ${
+                isRecording ? "text-red-500 animate-pulse" : "text-sky-500"
+              } cursor-pointer relative`}
             >
-                <MdKeyboardVoice className="w-10 h-10 p-2" />
-                {isRecording && (
-                    <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
-                )}
+              <MdKeyboardVoice className="w-10 h-10 p-2" />
+              {isRecording && (
+                <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+              )}
             </button>
 
             {/* Text input */}
@@ -430,54 +498,77 @@ export default function ChatPage({
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black opacity-50"
-              onClick={() => setShowModal(false)}
+              onClick={() => {
+                if (mediaStream) {
+                  mediaStream.getTracks().forEach((track) => track.stop());
+                }
+                setShowModal(false);
+                setIsCapturing(false);
+              }}
             />
             <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg p-4">
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-lg font-semibold">New Scan</h2>
-                <button onClick={() => setShowModal(false)} className="text-red-500 text-xl">
+                <button
+                  onClick={() => {
+                    if (mediaStream) {
+                      mediaStream.getTracks().forEach((track) => track.stop());
+                    }
+                    setShowModal(false);
+                    setIsCapturing(false);
+                  }}
+                  className="text-red-500 text-xl"
+                >
                   &times;
                 </button>
               </div>
-              <div>
-                {/* Show captured images with a cache-busting param */}
-                <div className="grid grid-cols-3 gap-2">
-                  {capturedImages.map((filename, idx) => (
-                    <Image
-                      key={idx}
-                      src={`/projects/${projectId}/${filename}?ts=${Date.now()}`}
-                      alt={`Captured ${filename}`}
-                      className="w-full h-auto border rounded mb-2"
-                      width={100}
-                      height={100}
-                    />
-                  ))}
+              {isCapturing ? (
+                <div>
+                  <video ref={videoRef} className="w-full" autoPlay playsInline></video>
+                  <button
+                    onClick={handleCapture}
+                    className="mt-2 px-4 py-2 bg-blue-500 text-white rounded"
+                  >
+                    Capture Image
+                  </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await captureDocumentPhoto();
-                    } catch (error) {
-                      console.error(error);
-                    }
-                  }}
-                  className="mb-0 mr-2 px-4 py-2 bg-blue-500 text-white rounded"
-                >
-                  Scan another image
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await createPdf(); // Make PDF & attach it
-                    setShowModal(false);
-                  }}
-                  className="mb-0 px-4 py-2 bg-blue-500 text-white rounded"
-                >
-                  Save as PDF
-                </button>
-              </div>
+              ) : (
+                <div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {capturedImages.map((filename, idx) => (
+                      <Image
+                        key={idx}
+                        src={`/projects/${projectId}/${filename}?ts=${Date.now()}`}
+                        alt={`Captured ${filename}`}
+                        className="w-full h-auto border rounded mb-2"
+                        width={100}
+                        height={100}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCapturing(true);
+                      }}
+                      className="px-4 py-2 bg-blue-500 text-white rounded"
+                    >
+                      Scan another page
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await createPdf();
+                        setShowModal(false);
+                      }}
+                      className="px-4 py-2 bg-blue-500 text-white rounded"
+                    >
+                      Save as PDF
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

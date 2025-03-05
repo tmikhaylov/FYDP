@@ -168,6 +168,10 @@ export default function ChatPage({
     const [capturedImages, setCapturedImages] = useState<string[]>([]);
     const [captureIndex, setCaptureIndex] = useState(0);
 
+    // New states for PDF naming modal
+    const [showPdfModal, setShowPdfModal] = useState(false);
+    const [pdfName, setPdfName] = useState("");
+
     // States for live video capture preview
     const [isCapturing, setIsCapturing] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -236,14 +240,9 @@ export default function ChatPage({
     }
 
     // Create PDF from captured images => attach as a File.
-    // Now, before creating the PDF, we prompt the user for a custom file name.
-    async function createPdf() {
+    // This function now uses the custom name from the PDF naming modal.
+    async function createPdf(customName: string) {
       try {
-        const customName = window.prompt("Give a name to this file scan", `scan_${Date.now()}`);
-        if (!customName) {
-          toast({ title: "Cancelled", description: "Scan cancelled: no name provided" });
-          return;
-        }
         const pdfFilename = `${customName}.pdf`;
         const res = await fetch("http://127.0.0.1:5000/capture-to-pdf", {
           method: "POST",
@@ -493,9 +492,53 @@ export default function ChatPage({
           )}
         </form>
 
+        {/* PDF Naming Modal */}
+        {showPdfModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black opacity-50"
+              onClick={() => setShowPdfModal(false)}
+            />
+            <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg p-4">
+              <h2 className="text-lg font-semibold mb-2">Name Your Scan</h2>
+              <Input
+                placeholder="Enter file name"
+                value={pdfName}
+                onChange={(e) => setPdfName(e.target.value)}
+              />
+              <div className="mt-4 flex justify-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowPdfModal(false);
+                    setPdfName("");
+                  }}
+                  className="px-4 py-2 bg-gray-500 rounded hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!pdfName.trim()) {
+                      toast({ title: "Error", description: "File name cannot be empty" });
+                      return;
+                    }
+                    await createPdf(pdfName.trim());
+                    setShowPdfModal(false);
+                    setPdfName("");
+                    setShowModal(false);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Webcam scanning modal */}
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-[5000] flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black opacity-50"
               onClick={() => {
@@ -527,7 +570,7 @@ export default function ChatPage({
                   <video ref={videoRef} className="w-full" autoPlay playsInline></video>
                   <button
                     onClick={handleCapture}
-                    className="mt-2 px-4 py-2 bg-blue-500 text-white rounded"
+                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
                   >
                     Capture Image
                   </button>
@@ -552,17 +595,16 @@ export default function ChatPage({
                       onClick={() => {
                         setIsCapturing(true);
                       }}
-                      className="px-4 py-2 bg-blue-500 text-white rounded"
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
                     >
                       Scan another page
                     </button>
                     <button
                       type="button"
                       onClick={async () => {
-                        await createPdf();
-                        setShowModal(false);
+                        setShowPdfModal(true);
                       }}
-                      className="px-4 py-2 bg-blue-500 text-white rounded"
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
                     >
                       Save as PDF
                     </button>

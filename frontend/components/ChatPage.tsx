@@ -417,11 +417,8 @@ export default function ChatPage({
       }
     }
 
-    // ----------------------------------
-    // Close scanning modal logic:
-    // ----------------------------------
+    // Close scanning modal logic
     async function handleCloseScanningModal() {
-      // If user is currently capturing
       if (isCapturing) {
         if (capturedImages.length === 0) {
           // no images => close everything
@@ -459,49 +456,64 @@ export default function ChatPage({
             </div>
           )}
           <div className="flex items-end gap-2">
-            {/* Attach local files */}
-            <label className="flex items-center justify-center text-xl text-sky-500 cursor-pointer">
-              <IoMdAttach className="w-10 h-10 p-2" />
-              <input type="file" multiple onChange={handleFileChange} className="hidden" />
-            </label>
+            {/* Attach local files with tooltip */}
+            <div className="relative group">
+              <label className="flex items-center justify-center text-xl text-sky-500 cursor-pointer">
+                <IoMdAttach className="w-10 h-10 p-2" />
+                <input type="file" multiple onChange={handleFileChange} className="hidden" />
+              </label>
+              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                Attach file
+              </span>
+            </div>
 
-            {/* Webcam capture */}
-            <button
-              type="button"
-              onClick={() => {
-                setCapturedImages([]);
-                setCaptureIndex(0);
-                setShowModal(true);
-                setIsCapturing(true);
-              }}
-              className="flex items-center justify-center text-xl text-sky-500 cursor-pointer"
-            >
-              <BsWebcam className="w-10 h-10 p-2" />
-            </button>
+            {/* Webcam capture with tooltip */}
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => {
+                  setCapturedImages([]);
+                  setCaptureIndex(0);
+                  setShowModal(true);
+                  setIsCapturing(true);
+                }}
+                className="flex items-center justify-center text-xl text-sky-500 cursor-pointer"
+              >
+                <BsWebcam className="w-10 h-10 p-2" />
+              </button>
+              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                Scan document
+              </span>
+            </div>
 
-            {/* Voice record */}
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  if (!isRecording) {
-                    await startVoiceRecording();
-                  } else {
-                    await stopVoiceRecording();
+            {/* Voice record with tooltip */}
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    if (!isRecording) {
+                      await startVoiceRecording();
+                    } else {
+                      await stopVoiceRecording();
+                    }
+                  } catch (error) {
+                    console.error(error);
                   }
-                } catch (error) {
-                  console.error(error);
-                }
-              }}
-              className={`flex items-center justify-center text-xl ${
-                isRecording ? "text-red-500 animate-pulse" : "text-sky-500"
-              } cursor-pointer relative`}
-            >
-              <MdKeyboardVoice className="w-10 h-10 p-2" />
-              {isRecording && (
-                <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
-              )}
-            </button>
+                }}
+                className={`flex items-center justify-center text-xl ${
+                  isRecording ? "text-red-500 animate-pulse" : "text-sky-500"
+                } cursor-pointer relative`}
+              >
+                <MdKeyboardVoice className="w-10 h-10 p-2" />
+                {isRecording && (
+                  <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                )}
+              </button>
+              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                Start voice message
+              </span>
+            </div>
 
             {/* Text input */}
             <Input
@@ -612,7 +624,7 @@ export default function ChatPage({
                     &times;
                   </button>
                   {/* Tooltip for "Close" */}
-                  <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1">
+                  <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
                     Close
                   </span>
                 </div>
@@ -648,7 +660,7 @@ export default function ChatPage({
                           >
                             &times;
                           </button>
-                          <span className="pointer-events-none absolute hidden group-hover:block -top-4 -right-14 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                          <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-14 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
                             Remove page
                           </span>
                         </div>

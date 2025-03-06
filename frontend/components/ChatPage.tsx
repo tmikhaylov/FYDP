@@ -172,7 +172,7 @@ export default function ChatPage({
     const [showPdfModal, setShowPdfModal] = useState(false);
     const [pdfName, setPdfName] = useState("");
 
-    // States for live video capture preview
+    // States for live video capture
     const [isCapturing, setIsCapturing] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
@@ -183,7 +183,8 @@ export default function ChatPage({
     useEffect(() => {
       let stream: MediaStream;
       if (showModal && isCapturing) {
-        navigator.mediaDevices.getUserMedia({ video: true })
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
           .then((s) => {
             stream = s;
             setMediaStream(s);
@@ -202,6 +203,29 @@ export default function ChatPage({
         }
       };
     }, [showModal, isCapturing]);
+
+    // Helper: remove a single captured image from storage + state
+    async function removeOneCapturedImage(filename: string) {
+      try {
+        // Call /delete-file-manual to remove from storage
+        await fetch("http://127.0.0.1:5000/delete-file-manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project_id: projectId, filename }),
+        });
+        // Remove from capturedImages array
+        setCapturedImages((prev) => {
+          const newArr = prev.filter((img) => img !== filename);
+          // If no images left, re-open video feed
+          if (newArr.length === 0) {
+            setIsCapturing(true);
+          }
+          return newArr;
+        });
+      } catch (error) {
+        console.error("Failed to remove captured image:", error);
+      }
+    }
 
     // Function to call /capture-document API to capture a document photo
     async function captureDocumentPhoto(clean = "") {
@@ -239,8 +263,7 @@ export default function ChatPage({
       }
     }
 
-    // Create PDF from captured images => attach as a File.
-    // This function now uses the custom name from the PDF naming modal.
+    // Create PDF from captured images => attach as a File
     async function createPdf(customName: string) {
       try {
         const pdfFilename = `${customName}.pdf`;
@@ -394,6 +417,43 @@ export default function ChatPage({
       }
     }
 
+    // ----------------------------------
+    // Close scanning modal logic:
+    // ----------------------------------
+    //  - If capturing is true and user closes => if no images => close everything; else show images
+    //  - If capturing is false => user is on "scan another page, save as pdf" => remove all .jpg from storage
+    //    then close everything
+    async function handleCloseScanningModal() {
+      // If user is currently capturing
+      if (isCapturing) {
+        if (capturedImages.length === 0) {
+          // no images => close everything
+          setShowModal(false);
+        } else {
+          // we have images => just show the "scan another page" portion
+          setIsCapturing(false);
+        }
+      } else {
+        // user is on "scan another page" portion => remove all .jpg from storage, close everything
+        // call /delete-file-manual for each captured image
+        try {
+          await Promise.all(
+            capturedImages.map((filename) =>
+              fetch("http://127.0.0.1:5000/delete-file-manual", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ project_id: projectId, filename }),
+              })
+            )
+          );
+        } catch (error) {
+          console.error("Failed to remove captured images:", error);
+        }
+        setCapturedImages([]);
+        setShowModal(false);
+      }
+    }
+
     return (
       <>
         <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-2">
@@ -541,26 +601,17 @@ export default function ChatPage({
           <div className="fixed inset-0 z-[5000] flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black opacity-50"
-              onClick={() => {
-                if (mediaStream) {
-                  mediaStream.getTracks().forEach((track) => track.stop());
-                }
-                setShowModal(false);
-                setIsCapturing(false);
-              }}
+              // On close button, handle close scanning modal logic
+              onClick={handleCloseScanningModal}
+              title="Close"
             />
             <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg p-4">
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-lg font-semibold">New Scan</h2>
                 <button
-                  onClick={() => {
-                    if (mediaStream) {
-                      mediaStream.getTracks().forEach((track) => track.stop());
-                    }
-                    setShowModal(false);
-                    setIsCapturing(false);
-                  }}
+                  onClick={handleCloseScanningModal}
                   className="text-red-500 text-xl"
+                  title="Close"
                 >
                   &times;
                 </button>
@@ -577,16 +628,25 @@ export default function ChatPage({
                 </div>
               ) : (
                 <div>
+                  {/* Show the grid of captured images, each with a removable "X" */}
                   <div className="grid grid-cols-3 gap-2">
                     {capturedImages.map((filename, idx) => (
-                      <Image
-                        key={idx}
-                        src={`/projects/${projectId}/${filename}?ts=${Date.now()}`}
-                        alt={`Captured ${filename}`}
-                        className="w-full h-auto border rounded mb-2"
-                        width={100}
-                        height={100}
-                      />
+                      <div className="relative" key={idx}>
+                        <Image
+                          src={`/projects/${projectId}/${filename}?ts=${Date.now()}`}
+                          alt={`Captured ${filename}`}
+                          className="w-full h-auto border rounded mb-2"
+                          width={100}
+                          height={100}
+                        />
+                        <button
+                          onClick={() => removeOneCapturedImage(filename)}
+                          className="absolute top-1 right-1 text-red-500 text-xl"
+                          title="Remove page"
+                        >
+                          &times;
+                        </button>
+                      </div>
                     ))}
                   </div>
                   <div className="mt-2 flex gap-2">
@@ -601,7 +661,7 @@ export default function ChatPage({
                     </button>
                     <button
                       type="button"
-                      onClick={async () => {
+                      onClick={() => {
                         setShowPdfModal(true);
                       }}
                       className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"

@@ -447,6 +447,9 @@ export default function ChatPage({
       }
     }
 
+    // Dynamically set voice record tooltip text
+    const voiceRecordTooltip = isRecording ? "End voice message" : "Start voice message";
+
     return (
       <>
         <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-2">
@@ -486,7 +489,7 @@ export default function ChatPage({
               </span>
             </div>
 
-            {/* Voice record with tooltip */}
+            {/* Voice record with dynamic tooltip */}
             <div className="relative group">
               <button
                 type="button"
@@ -510,8 +513,9 @@ export default function ChatPage({
                   <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
                 )}
               </button>
+              {/* Show different tooltip text based on isRecording */}
               <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-                Start voice message
+                {voiceRecordTooltip}
               </span>
             </div>
 

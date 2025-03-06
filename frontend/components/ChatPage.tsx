@@ -168,18 +168,18 @@ export default function ChatPage({
     const [capturedImages, setCapturedImages] = useState<string[]>([]);
     const [captureIndex, setCaptureIndex] = useState(0);
 
-    // New states for PDF naming modal
+    // PDF naming modal
     const [showPdfModal, setShowPdfModal] = useState(false);
     const [pdfName, setPdfName] = useState("");
 
-    // States for live video capture
+    // Video capture
     const [isCapturing, setIsCapturing] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
 
     const formRef = useRef<HTMLFormElement>(null);
 
-    // Start video stream when modal is open and capturing is enabled
+    // Start video stream if scanning modal is open + capturing
     useEffect(() => {
       let stream: MediaStream;
       if (showModal && isCapturing) {
@@ -204,7 +204,7 @@ export default function ChatPage({
       };
     }, [showModal, isCapturing]);
 
-    // Helper: remove a single captured image from storage + state
+    // Remove a single captured image
     async function removeOneCapturedImage(filename: string) {
       try {
         await fetch("http://127.0.0.1:5000/delete-file-manual", {
@@ -224,7 +224,7 @@ export default function ChatPage({
       }
     }
 
-    // Function to call /capture-document API to capture a document photo
+    // capture-document
     async function captureDocumentPhoto(clean = "") {
       const outputFilename = `captured_document_${captureIndex}.jpg`;
       const res = await fetch("http://127.0.0.1:5000/capture-document", {
@@ -244,7 +244,7 @@ export default function ChatPage({
       return data.upload_id;
     }
 
-    // Handler for the Capture Image button – calls the /capture-document API
+    // handleCapture
     async function handleCapture() {
       try {
         const shouldClean = captureIndex === 0 ? "clean" : "";
@@ -259,7 +259,7 @@ export default function ChatPage({
       }
     }
 
-    // Create PDF from captured images => attach as a File
+    // createPdf
     async function createPdf(customName: string) {
       try {
         const pdfFilename = `${customName}.pdf`;
@@ -297,7 +297,7 @@ export default function ChatPage({
       }
     }
 
-    // Submit the chat input
+    // handleSubmit
     async function handleSubmit(e: FormEvent<HTMLFormElement>) {
       e.preventDefault();
       if (!message && attachments.length === 0 && !voiceTranscript) return;
@@ -371,14 +371,14 @@ export default function ChatPage({
       }
     }
 
-    // User attaches local files
+    // handleFileChange
     function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
       if (!e.target.files) return;
       const newFiles = Array.from(e.target.files).map((file) => ({ file }));
       setAttachments((prev) => [...prev, ...newFiles]);
     }
 
-    // User removes an attachment
+    // removeAttachment
     async function removeAttachment(index: number) {
       const attachment = attachments[index];
       setAttachments((prev) => prev.filter((_, i) => i !== index));
@@ -404,7 +404,7 @@ export default function ChatPage({
       }
     }
 
-    // Close scanning modal logic
+    // handleCloseScanningModal
     async function handleCloseScanningModal() {
       if (isCapturing) {
         if (capturedImages.length === 0) {
@@ -431,7 +431,7 @@ export default function ChatPage({
       }
     }
 
-    // Dynamically set voice record tooltip text
+    // Dynamic tooltip text
     const voiceRecordTooltip = isRecording ? "End voice message" : "Start voice message";
 
     return (
@@ -449,7 +449,7 @@ export default function ChatPage({
                 <IoMdAttach className="w-10 h-10 p-2" />
                 <input type="file" multiple onChange={handleFileChange} className="hidden" />
               </label>
-              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-[9999]">
                 Attach file
               </span>
             </div>
@@ -468,7 +468,7 @@ export default function ChatPage({
               >
                 <BsWebcam className="w-10 h-10 p-2" />
               </button>
-              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-[9999]">
                 Scan document
               </span>
             </div>
@@ -497,7 +497,7 @@ export default function ChatPage({
                   <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
                 )}
               </button>
-              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+              <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-[9999]">
                 {voiceRecordTooltip}
               </span>
             </div>
@@ -593,7 +593,7 @@ export default function ChatPage({
 
         {/* Webcam scanning modal */}
         {showModal && (
-          <div className="fixed inset-0 z-[5000] flex items-center justify-center">
+          <div className="fixed inset-0 z-[5000] flex items-center justify-center overflow-visible">
             <div
               className="absolute inset-0 bg-black opacity-50"
               onClick={handleCloseScanningModal}
@@ -607,7 +607,7 @@ export default function ChatPage({
                   <button onClick={handleCloseScanningModal} className="text-red-500 text-xl">
                     &times;
                   </button>
-                  <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                  <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-[9999]">
                     Close
                   </span>
                 </div>
@@ -624,10 +624,14 @@ export default function ChatPage({
                 </div>
               ) : (
                 <div>
-                  {/* Captured images grid now limited to a max height of 360px with vertical scroll */}
-                  <div className="grid grid-cols-3 gap-2 max-h-[360px] overflow-y-auto custom-scrollbar">
+                  {/* 
+                    We set max-h to 360px so that up to 3 rows fit, then it scrolls.
+                    The container is relative + overflow-y-auto. 
+                    Each item is relative overflow-visible, with a high z-index on the tooltip.
+                  */}
+                  <div className="grid grid-cols-3 gap-2 overflow-y-auto pt-4 pr-3 custom-scrollbar" style={{ maxHeight: "360px" }}>
                     {capturedImages.map((filename, idx) => (
-                      <div className="relative" key={idx}>
+                      <div key={idx} className="relative overflow-visible">
                         <Image
                           src={`/projects/${projectId}/${filename}?ts=${Date.now()}`}
                           alt={`Captured ${filename}`}
@@ -642,14 +646,14 @@ export default function ChatPage({
                           >
                             &times;
                           </button>
-                          <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-14 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                          <span className="pointer-events-none absolute hidden group-hover:block z-[9999] -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
                             Remove page
                           </span>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => {

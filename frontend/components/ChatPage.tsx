@@ -567,7 +567,7 @@ export default function ChatPage({
                     setShowPdfModal(false);
                     setPdfName("");
                   }}
-                  className="px-4 py-2 bg-gray-500 rounded hover:bg-gray-400"
+                  className="px-8 py-2 bg-gray-500 rounded hover:bg-gray-400"
                 >
                   Cancel
                 </button>
@@ -582,7 +582,7 @@ export default function ChatPage({
                     setPdfName("");
                     setShowModal(false);
                   }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
+                  className="px-8 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
                 >
                   Save
                 </button>
@@ -617,7 +617,7 @@ export default function ChatPage({
                   <video ref={videoRef} className="w-full" autoPlay playsInline></video>
                   <button
                     onClick={handleCapture}
-                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
+                    className="mt-2 px-72 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
                   >
                     Capture Image
                   </button>
@@ -659,7 +659,7 @@ export default function ChatPage({
                       onClick={() => {
                         setIsCapturing(true);
                       }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
+                      className="px-11 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
                     >
                       Scan another page
                     </button>
@@ -668,7 +668,7 @@ export default function ChatPage({
                       onClick={() => {
                         setShowPdfModal(true);
                       }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
+                      className="px-11 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
                     >
                       Save as PDF
                     </button>

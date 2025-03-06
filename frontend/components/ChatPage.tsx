@@ -310,32 +310,31 @@ export default function ChatPage({
 
         let uploadId: string | undefined;
         if (attachments.length > 0) {
-          let att = attachments[0];
-          if (!att.upload_id) {
-            const uploadResult = await uploadFile(att.file);
-            uploadId = uploadResult.upload_id;
-
-            att = { ...att, upload_id: uploadResult.upload_id, filename: uploadResult.filename };
-            setAttachments((prev) => {
-              const newArr = [...prev];
-              newArr[0] = att;
-              return newArr;
-            });
-
-            const dbRes = await fetch(`/api/project/${projectId}/db-files`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                upload_id: uploadResult.upload_id,
-                filename: uploadResult.filename,
-              }),
-            });
-            if (!dbRes.ok) {
-              throw new Error("Failed to update database with file info");
-            }
-          } else {
-            uploadId = att.upload_id;
-          }
+          // Loop through all attachments and upload each one if not already uploaded
+          const uploadedAttachments = await Promise.all(
+            attachments.map(async (att) => {
+              if (!att.upload_id) {
+                const uploadResult = await uploadFile(att.file);
+                // Update DB file info for each file
+                const dbRes = await fetch(`/api/project/${projectId}/db-files`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    upload_id: uploadResult.upload_id,
+                    filename: uploadResult.filename,
+                  }),
+                });
+                if (!dbRes.ok) {
+                  throw new Error("Failed to update database with file info");
+                }
+                return { ...att, upload_id: uploadResult.upload_id, filename: uploadResult.filename };
+              }
+              return att;
+            })
+          );
+          setAttachments(uploadedAttachments);
+          // Use the first attachment's upload_id for the execute API call
+          uploadId = uploadedAttachments[0].upload_id;
         }
 
         const finalText = message || voiceTranscript;

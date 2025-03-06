@@ -329,7 +329,7 @@ export function ChatInput(props: ChatInputProps) {
           <div className="relative group">
             <label className="flex items-center justify-center text-xl text-sky-500 cursor-pointer">
               <IoMdAttach className="w-10 h-10 p-2" />
-              <input type="file" multiple onChange={handleFileChange} className="hidden" />
+              <input type="file" multiple accept=".pdf" onChange={handleFileChange} className="hidden" />
             </label>
             <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-[9999]">
               Attach file

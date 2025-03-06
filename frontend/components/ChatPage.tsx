@@ -207,16 +207,13 @@ export default function ChatPage({
     // Helper: remove a single captured image from storage + state
     async function removeOneCapturedImage(filename: string) {
       try {
-        // Call /delete-file-manual to remove from storage
         await fetch("http://127.0.0.1:5000/delete-file-manual", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ project_id: projectId, filename }),
         });
-        // Remove from capturedImages array
         setCapturedImages((prev) => {
           const newArr = prev.filter((img) => img !== filename);
-          // If no images left, re-open video feed
           if (newArr.length === 0) {
             setIsCapturing(true);
           }
@@ -252,7 +249,6 @@ export default function ChatPage({
       try {
         const shouldClean = captureIndex === 0 ? "clean" : "";
         await captureDocumentPhoto(shouldClean);
-        // Stop the video stream after capture
         if (mediaStream) {
           mediaStream.getTracks().forEach((track) => track.stop());
           setMediaStream(null);
@@ -283,7 +279,6 @@ export default function ChatPage({
         const data = await res.json();
         const finalPdfFilename = data.pdf_filename;
 
-        // Retrieve PDF from server
         const pdfUrl = `/projects/${projectId}/${finalPdfFilename}`;
         const pdfResponse = await fetch(pdfUrl);
         if (!pdfResponse.ok) {
@@ -291,7 +286,6 @@ export default function ChatPage({
         }
         const pdfBlob = await pdfResponse.blob();
 
-        // Wrap in a File object and mark it as scanned
         const pdfFile = new File([pdfBlob], finalPdfFilename, { type: "application/pdf" });
         setAttachments((prev) => [...prev, { file: pdfFile, scanned: true }]);
       } catch (error) {
@@ -316,13 +310,11 @@ export default function ChatPage({
 
         let uploadId: string | undefined;
         if (attachments.length > 0) {
-          // Process only the first attachment for execution
           let att = attachments[0];
           if (!att.upload_id) {
             const uploadResult = await uploadFile(att.file);
             uploadId = uploadResult.upload_id;
 
-            // Update local attachments
             att = { ...att, upload_id: uploadResult.upload_id, filename: uploadResult.filename };
             setAttachments((prev) => {
               const newArr = [...prev];
@@ -330,7 +322,6 @@ export default function ChatPage({
               return newArr;
             });
 
-            // Insert into DB
             const dbRes = await fetch(`/api/project/${projectId}/db-files`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -352,7 +343,6 @@ export default function ChatPage({
         await patchConversation(finalText, finalAnswer, attachmentNames);
         handleUpdateAnswer(tempId, finalAnswer);
 
-        // Delete all scanned PDF attachments from storage (if any)
         const scannedPdfAttachments = attachments.filter((att) => att.scanned);
         if (scannedPdfAttachments.length > 0) {
           await Promise.all(
@@ -366,7 +356,6 @@ export default function ChatPage({
           );
         }
 
-        // Reset input fields and attachments
         setMessage("");
         setAttachments([]);
         setVoiceTranscript("");
@@ -394,7 +383,6 @@ export default function ChatPage({
       const attachment = attachments[index];
       setAttachments((prev) => prev.filter((_, i) => i !== index));
 
-      // For scanned PDFs, call delete-file-manual to remove from storage
       if (attachment.scanned) {
         await fetch("http://127.0.0.1:5000/delete-file-manual", {
           method: "POST",
@@ -402,7 +390,6 @@ export default function ChatPage({
           body: JSON.stringify({ project_id: projectId, filename: attachment.file.name }),
         });
       } else if (attachment.upload_id) {
-        // If it was uploaded (non-scanned attachment), delete from server + DB
         await fetch("http://127.0.0.1:5000/delete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -421,14 +408,11 @@ export default function ChatPage({
     async function handleCloseScanningModal() {
       if (isCapturing) {
         if (capturedImages.length === 0) {
-          // no images => close everything
           setShowModal(false);
         } else {
-          // we have images => just show the "scan another page" portion
           setIsCapturing(false);
         }
       } else {
-        // user is on "scan another page" portion => remove all .jpg from storage, close everything
         try {
           await Promise.all(
             capturedImages.map((filename) =>
@@ -513,7 +497,6 @@ export default function ChatPage({
                   <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
                 )}
               </button>
-              {/* Show different tooltip text based on isRecording */}
               <span className="pointer-events-none absolute hidden group-hover:block -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
                 {voiceRecordTooltip}
               </span>
@@ -621,13 +604,9 @@ export default function ChatPage({
 
                 {/* Close Button with custom tooltip on hover */}
                 <div className="relative group">
-                  <button
-                    onClick={handleCloseScanningModal}
-                    className="text-red-500 text-xl"
-                  >
+                  <button onClick={handleCloseScanningModal} className="text-red-500 text-xl">
                     &times;
                   </button>
-                  {/* Tooltip for "Close" */}
                   <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
                     Close
                   </span>
@@ -645,8 +624,8 @@ export default function ChatPage({
                 </div>
               ) : (
                 <div>
-                  {/* Show the grid of captured images, each with a removable "X" */}
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* Captured images grid now limited to a max height of 360px with vertical scroll */}
+                  <div className="grid grid-cols-3 gap-2 max-h-[360px] overflow-y-auto custom-scrollbar">
                     {capturedImages.map((filename, idx) => (
                       <div className="relative" key={idx}>
                         <Image
@@ -656,7 +635,6 @@ export default function ChatPage({
                           width={100}
                           height={100}
                         />
-                        {/* "Remove page" tooltip */}
                         <div className="absolute top-1 right-1 group">
                           <button
                             onClick={() => removeOneCapturedImage(filename)}

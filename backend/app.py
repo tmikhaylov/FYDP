@@ -326,7 +326,6 @@ def capture_document_photo(camera_index=0, output_filename="captured_document.jp
     desired_height = 2448
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, desired_width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, desired_height)
-    time.sleep(5)
 
     attempts = 5
     frame = None

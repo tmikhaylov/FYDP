@@ -77,7 +77,7 @@ export function ProjectFiles({
     <>
       <button
         type="button"
-        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded"
+        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
         onClick={() => setShowModal(true)}
       >
         Project files
@@ -92,15 +92,20 @@ export function ProjectFiles({
           <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-lg w-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">Project files</h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-red-500 text-xl"
-              >
-                &times;
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-red-500 text-xl"
+                >
+                  &times;
+                </button>
+                <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-[9999]">
+                  Close
+                </span>
+              </div>
             </div>
             <div className="mb-4">
-              <label className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded cursor-pointer">
+              <label className="px-4 py-2 bg-gray-200 dark:bg-blue-600 rounded cursor-pointer hover:bg-gray-300 dark:hover:bg-sky-500">
                 Add files
                 <input
                   type="file"
@@ -111,7 +116,7 @@ export function ProjectFiles({
                 />
               </label>
             </div>
-            <div className="max-h-60 overflow-y-auto custom-scrollbar">
+            <div className="max-h-60 pt-3 pr-2 overflow-y-auto custom-scrollbar">
               {fileList.map((f) => (
                 <div
                   key={f.id}
@@ -120,13 +125,18 @@ export function ProjectFiles({
                   <span className="text-sm truncate max-w-[200px]">
                     {f.filename}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(f.id)}
-                    className="text-red-500 text-xl"
-                  >
-                    &times;
-                  </button>
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(f.id)}
+                      className="text-red-500 text-xl"
+                    >
+                      &times;
+                    </button>
+                    <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-700 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-[9999]">
+                      Remove file from project
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

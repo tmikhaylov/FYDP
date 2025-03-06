@@ -114,7 +114,7 @@ export default function NewProjectButton({
               <button
                 type="button"
                 onClick={handleCreate}
-                className="px-3 py-1 bg-sky-600 text-white rounded hover:bg-sky-500"
+                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-sky-500"
               >
                 Create project
               </button>

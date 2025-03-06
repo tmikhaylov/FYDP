@@ -64,7 +64,7 @@ export default function NewChatModal({ projectId }: { projectId: string }) {
               <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-400">
                 Cancel
               </button>
-              <button onClick={handleCreateChat} className="px-3 py-1 bg-sky-600 text-white rounded hover:bg-sky-500">
+              <button onClick={handleCreateChat} className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-sky-500">
                 Create Chat
               </button>
             </div>

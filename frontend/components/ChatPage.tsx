@@ -316,6 +316,18 @@ export function ChatInput(props: ChatInputProps) {
 
   const voiceRecordTooltip = isRecording ? "End voice message" : "Start voice message";
 
+  // New helper function for saving PDF from the naming modal.
+  async function handleSavePdf() {
+    if (!pdfName.trim()) {
+      toast({ title: "Error", description: "File name cannot be empty" });
+      return;
+    }
+    await createPdf(pdfName.trim());
+    setShowPdfModal(false);
+    setPdfName("");
+    setShowModal(false);
+  }
+
   return (
     <>
       <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-2">
@@ -428,7 +440,17 @@ export function ChatInput(props: ChatInputProps) {
           <div className="absolute inset-0 bg-black opacity-50" onClick={() => setShowPdfModal(false)} />
           <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg p-4">
             <h2 className="text-lg font-semibold mb-2">Name Your Scan</h2>
-            <Input placeholder="Enter file name" value={pdfName} onChange={(e) => setPdfName(e.target.value)} />
+            <Input
+              placeholder="Enter file name"
+              value={pdfName}
+              onChange={(e) => setPdfName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSavePdf();
+                }
+              }}
+            />
             <div className="mt-4 flex justify-center gap-2">
               <button
                 onClick={() => {
@@ -440,16 +462,7 @@ export function ChatInput(props: ChatInputProps) {
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  if (!pdfName.trim()) {
-                    toast({ title: "Error", description: "File name cannot be empty" });
-                    return;
-                  }
-                  await createPdf(pdfName.trim());
-                  setShowPdfModal(false);
-                  setPdfName("");
-                  setShowModal(false);
-                }}
+                onClick={handleSavePdf}
                 className="px-8 py-2 bg-blue-600 text-white rounded hover:bg-sky-500"
               >
                 Save

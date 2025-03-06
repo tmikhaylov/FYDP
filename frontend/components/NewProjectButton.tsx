@@ -2,6 +2,7 @@
 
 import { IoMdAddCircleOutline } from "react-icons/io";
 import { useState } from "react";
+import { useToast } from "./ui/use-toast";
 import { useRouter } from "next/navigation";
 
 /**
@@ -17,9 +18,13 @@ export default function NewProjectButton({
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState("");
   const router = useRouter();
+  const { toast } = useToast();
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      toast({ title: "Error", description: "Project name cannot be empty" });
+      return;
+    }
     try {
       // 1) Create the project in Next.js
       const res = await fetch("/api/project", {
@@ -89,6 +94,12 @@ export default function NewProjectButton({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleCreate();
+                }
+              }}
               placeholder="Project name"
               className="w-full mb-4 p-2 rounded border dark:bg-gray-800 dark:text-white"
             />

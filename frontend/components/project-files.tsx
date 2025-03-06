@@ -13,39 +13,46 @@ export function ProjectFiles({
 
   async function handleAddFiles(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files) return;
-    const formData = new FormData();
-    formData.append("file", e.target.files[0]);
-    formData.append("project_id", projectId);
-    const res = await fetch("http://127.0.0.1:5000/upload", {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) {
-      alert("Failed to upload file");
-      return;
-    }
-    const data = await res.json();
-    const getRes = await fetch(`http://127.0.0.1:5000/get_filename/${data.upload_id}`);
-    const getData = await getRes.json();
-    const fileRecord = { id: data.upload_id, filename: getData.filename };
+    const files = Array.from(e.target.files);
 
-    // NEW: Update the database with the new file info
-    const dbRes = await fetch(`/api/project/${projectId}/db-files`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ upload_id: data.upload_id, filename: getData.filename }),
-    });
-    if (!dbRes.ok) {
-      alert("Failed to update database");
-      return;
-    }
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("project_id", projectId);
 
-    setFileList((prev) => [...prev, fileRecord]);
+      const res = await fetch("http://127.0.0.1:5000/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        alert(`Failed to upload file: ${file.name}`);
+        continue;
+      }
+      const data = await res.json();
+
+      const getRes = await fetch(`http://127.0.0.1:5000/get_filename/${data.upload_id}`);
+      const getData = await getRes.json();
+      const fileRecord = { id: data.upload_id, filename: getData.filename };
+
+      // Update the database with the new file info
+      const dbRes = await fetch(`/api/project/${projectId}/db-files`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_id: data.upload_id, filename: getData.filename }),
+      });
+      if (!dbRes.ok) {
+        alert(`Failed to update database for file: ${file.name}`);
+        continue;
+      }
+
+      setFileList((prev) => [...prev, fileRecord]);
+    }
   }
 
   async function handleDelete(fileId: string) {
     const confirmed = confirm("Are you sure you want to delete this file?");
     if (!confirmed) return;
+
     const res = await fetch("http://127.0.0.1:5000/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -55,7 +62,7 @@ export function ProjectFiles({
       alert("Failed to delete file");
       return;
     }
-    // NEW: Remove the file record from the database
+    // Remove the file record from the database
     const dbRes = await fetch(`/api/project/${projectId}/db-files?fileId=${fileId}`, {
       method: "DELETE",
     });
@@ -78,25 +85,46 @@ export function ProjectFiles({
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black opacity-50" onClick={() => setShowModal(false)} />
+          <div
+            className="absolute inset-0 bg-black opacity-50"
+            onClick={() => setShowModal(false)}
+          />
           <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-lg w-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">Project files</h2>
-              <button onClick={() => setShowModal(false)} className="text-red-500 text-xl">
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-red-500 text-xl"
+              >
                 &times;
               </button>
             </div>
             <div className="mb-4">
               <label className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded cursor-pointer">
                 Add files
-                <input type="file" onChange={handleAddFiles} className="hidden" />
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf"
+                  onChange={handleAddFiles}
+                  className="hidden"
+                />
               </label>
             </div>
             <div className="max-h-60 overflow-y-auto custom-scrollbar">
               {fileList.map((f) => (
-                <div key={f.id} className="flex justify-between items-center mb-2 bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                  <span className="text-sm truncate max-w-[200px]">{f.filename}</span>
-                  <button type="button" onClick={() => handleDelete(f.id)} className="text-red-500 text-xl">
+                <div
+                  key={f.id}
+                  className="flex justify-between items-center mb-2 bg-gray-100 dark:bg-gray-800 p-2 rounded"
+                >
+                  <span className="text-sm truncate max-w-[200px]">
+                    {f.filename}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(f.id)}
+                    className="text-red-500 text-xl"
+                  >
                     &times;
                   </button>
                 </div>

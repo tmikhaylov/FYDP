@@ -1,17 +1,21 @@
-// app/(private-layout)/project/NewProjectPageClient.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function NewProjectPageClient() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   async function handleCreateProject() {
     console.log("handleCreateProject was called!");
-    if (!name.trim()) return;
+    if (!name.trim()) {
+        toast({ title: "Error", description: "Project name cannot be empty" });
+        return;
+    }
     setLoading(true);
     try {
       // 1) Create in DB
@@ -60,6 +64,12 @@ export default function NewProjectPageClient() {
           value={name}
           placeholder="Project Name"
           onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleCreateProject();
+            }
+          }}
           className="p-2 border rounded"
         />
         <button

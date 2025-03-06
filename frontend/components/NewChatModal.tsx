@@ -1,16 +1,24 @@
-// components/NewChatModal.tsx
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { buttonVariants } from "./ui/button";
+import { useToast } from "./ui/use-toast";
 
 export default function NewChatModal({ projectId }: { projectId: string }) {
   const [showModal, setShowModal] = useState(false);
   const [chatName, setChatName] = useState("");
   const router = useRouter();
+  const { toast } = useToast();
 
   async function handleCreateChat() {
-    if (!chatName.trim() || !projectId) return;
+    if (!chatName.trim()) {
+        toast({ title: "Error", description: "Chat name cannot be empty" });
+        return;
+    }
+    if (!projectId) {
+        toast({ title: "Error", description: "Chat has to be inside a project" });
+        return;
+    }
     try {
       const res = await fetch("/api/conversation", {
         method: "POST",
@@ -43,6 +51,12 @@ export default function NewChatModal({ projectId }: { projectId: string }) {
               type="text"
               value={chatName}
               onChange={(e) => setChatName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleCreateChat();
+                }
+              }}
               placeholder="Chat name"
               className="w-full mb-4 p-2 rounded border dark:bg-gray-800 dark:text-white"
             />

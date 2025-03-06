@@ -420,9 +420,6 @@ export default function ChatPage({
     // ----------------------------------
     // Close scanning modal logic:
     // ----------------------------------
-    //  - If capturing is true and user closes => if no images => close everything; else show images
-    //  - If capturing is false => user is on "scan another page, save as pdf" => remove all .jpg from storage
-    //    then close everything
     async function handleCloseScanningModal() {
       // If user is currently capturing
       if (isCapturing) {
@@ -435,7 +432,6 @@ export default function ChatPage({
         }
       } else {
         // user is on "scan another page" portion => remove all .jpg from storage, close everything
-        // call /delete-file-manual for each captured image
         try {
           await Promise.all(
             capturedImages.map((filename) =>
@@ -601,20 +597,25 @@ export default function ChatPage({
           <div className="fixed inset-0 z-[5000] flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black opacity-50"
-              // On close button, handle close scanning modal logic
               onClick={handleCloseScanningModal}
-              title="Close"
             />
             <div className="relative bg-white dark:bg-gray-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg p-4">
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-lg font-semibold">New Scan</h2>
-                <button
-                  onClick={handleCloseScanningModal}
-                  className="text-red-500 text-xl"
-                  title="Close"
-                >
-                  &times;
-                </button>
+
+                {/* Close Button with custom tooltip on hover */}
+                <div className="relative group">
+                  <button
+                    onClick={handleCloseScanningModal}
+                    className="text-red-500 text-xl"
+                  >
+                    &times;
+                  </button>
+                  {/* Tooltip for "Close" */}
+                  <span className="pointer-events-none absolute hidden group-hover:block -top-5 -right-4 bg-gray-800 text-white text-xs rounded px-2 py-1">
+                    Close
+                  </span>
+                </div>
               </div>
               {isCapturing ? (
                 <div>
@@ -639,13 +640,18 @@ export default function ChatPage({
                           width={100}
                           height={100}
                         />
-                        <button
-                          onClick={() => removeOneCapturedImage(filename)}
-                          className="absolute top-1 right-1 text-red-500 text-xl"
-                          title="Remove page"
-                        >
-                          &times;
-                        </button>
+                        {/* "Remove page" tooltip */}
+                        <div className="absolute top-1 right-1 group">
+                          <button
+                            onClick={() => removeOneCapturedImage(filename)}
+                            className="text-red-500 text-xl"
+                          >
+                            &times;
+                          </button>
+                          <span className="pointer-events-none absolute hidden group-hover:block -top-4 -right-14 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                            Remove page
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>

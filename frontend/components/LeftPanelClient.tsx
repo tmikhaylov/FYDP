@@ -22,6 +22,13 @@ import {
 
 import NewProjectButton from "@/components/NewProjectButton";
 
+/**
+ * Simple classNames utility (if you have a preferred one, feel free to use it).
+ */
+function cn(...classes: (string | boolean | null | undefined)[]) {
+  return classes.filter(Boolean).join(" ");
+}
+
 type Project = {
   id: string;
   name: string;
@@ -32,8 +39,11 @@ export default function LeftPanelClient({
 }: {
   projects: Project[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [openSheet, setOpenSheet] = useState(false);
   const [projects, setProjects] = useState<Project[]>(initialProjects);
+
+  // Tracks which project's dropdown is open (null if none)
+  const [openDropdownProjectId, setOpenDropdownProjectId] = useState<string | null>(null);
 
   // Function to delete a project from the DB and update local state
   const handleDeleteProject = async (projectId: string) => {
@@ -46,6 +56,10 @@ export default function LeftPanelClient({
       }
       // Remove it from local state
       setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      // If that project's dropdown was open, close it
+      if (openDropdownProjectId === projectId) {
+        setOpenDropdownProjectId(null);
+      }
     } catch (error) {
       console.error(error);
       // You could show a toast or error message here
@@ -53,7 +67,7 @@ export default function LeftPanelClient({
   };
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={openSheet} onOpenChange={setOpenSheet}>
       {/* SheetTrigger toggles the sidebar */}
       <SheetTrigger asChild>
         <div className="flex flex-row items-center gap-2 cursor-pointer">
@@ -66,53 +80,75 @@ export default function LeftPanelClient({
         <div>
           <h3 className="px-7 text-xl font-semibold">Your Projects</h3>
           {/* Pass a callback to close the sheet after creating a project */}
-          <NewProjectButton onProjectCreated={() => setOpen(false)} />
+          <NewProjectButton onProjectCreated={() => setOpenSheet(false)} />
 
           <ScrollArea className="flex flex-col mt-7 items-start overflow-y-auto h-[90vh] pb-12">
-            {projects.map((proj) => (
-              <div
-                key={proj.id}
-                // A container that shows a shadow on hover and a background "box" behind the project
-                className="group w-full my-3 px-8 py-2 rounded-md flex items-center justify-between transition-shadow hover:shadow-md hover:bg-gray-700"
-              >
-                {/* Clicking the project name navigates, and also closes the sheet */}
-                <SheetClose asChild>
+            {projects.map((proj) => {
+              const isDropdownOpen = openDropdownProjectId === proj.id;
+
+              return (
+                // Wrap the entire row in a Link so the whole row is clickable.
+                <SheetClose asChild key={proj.id}>
                   <Link
                     href={`/project/${proj.id}`}
-                    className="truncate max-w-[70%] no-underline"
+                    className={cn(
+                      "group w-full my-3 px-8 py-2 rounded-md flex items-center justify-between transition-shadow",
+                      isDropdownOpen
+                        ? "shadow-md bg-gray-700"
+                        : "hover:shadow-md hover:bg-gray-700"
+                    )}
                   >
-                    {proj.name.length > 35
-                      ? proj.name.slice(0, 35) + "..."
-                      : proj.name}
+                    {/* Project name */}
+                    <span className="truncate max-w-[70%] no-underline text-inherit">
+                      {proj.name.length > 35
+                        ? proj.name.slice(0, 35) + "..."
+                        : proj.name}
+                    </span>
+
+                    {/* The options button, shown only on hover or if dropdown is open */}
+                    <DropdownMenu
+                      open={isDropdownOpen}
+                      onOpenChange={(open) => {
+                        // If opening, set this project as open
+                        // If closing, set to null
+                        setOpenDropdownProjectId(open ? proj.id : null);
+                      }}
+                    >
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          onClick={(e) => {
+                            // Prevent this click from navigating
+                            e.stopPropagation();
+                          }}
+                          className={cn(
+                            "text-gray-300 hover:text-gray-100 transition-opacity",
+                            isDropdownOpen
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100"
+                          )}
+                        >
+                          <SlOptions size={16} />
+                        </button>
+                      </DropdownMenuTrigger>
+
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          className="cursor-pointer text-red-500"
+                          onClick={(e) => {
+                            // Prevent this click from navigating
+                            e.stopPropagation();
+                            handleDeleteProject(proj.id);
+                          }}
+                        >
+                          <RiDeleteBin5Line className="mr-2 h-4 w-4 text-red-500" />
+                          Delete project
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </Link>
                 </SheetClose>
-
-                {/* The options button, shown only on hover */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      onClick={(e) => {
-                        // Prevent clicking this from triggering the Link
-                        e.stopPropagation();
-                      }}
-                      className="text-gray-300 hover:text-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <SlOptions size={16} />
-                    </button>
-                  </DropdownMenuTrigger>
-
-                  <DropdownMenuContent>
-                    <DropdownMenuItem
-                      className="cursor-pointer text-red-500"
-                      onClick={() => handleDeleteProject(proj.id)}
-                    >
-                      <RiDeleteBin5Line className="mr-2 h-4 w-4 text-red-500" />
-                      Delete project
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
+              );
+            })}
           </ScrollArea>
         </div>
       </SheetContent>

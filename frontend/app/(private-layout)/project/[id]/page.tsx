@@ -1,4 +1,3 @@
-// app/(private-layout)/project/[id]/page.tsx
 import prisma from "@/prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
@@ -6,7 +5,11 @@ import Navbar from "@/components/navbar";
 import { ProjectFiles } from "@/components/project-files";
 import { ChatList } from "@/components/chat-list";
 import NewChatModal from "@/components/NewChatModal";
+import dynamic from "next/dynamic";
 import React from "react";
+
+// Dynamically import the client-side rename component (no SSR)
+const RenameProject = dynamic(() => import("./RenameProject"), { ssr: false });
 
 type PageParams = {
   params: { id: string };
@@ -29,10 +32,14 @@ export default async function ProjectPage({ params: { id: projectId } }: PagePar
 
   return (
     <>
-      {/* Pass project info to Navbar so it shows "Project: ___" + new chat button */}
+      {/* Pass project info to Navbar */}
       <Navbar projectName={project.name} projectId={project.id} />
       <div className="max-w-4xl mx-auto p-4 space-y-6">
-        <h1 className="text-2xl font-semibold">{project.name}</h1>
+        {/* Project header with name and edit icon */}
+        <div className="flex items-center space-x-2">
+          <h1 className="text-2xl font-semibold">{project.name}</h1>
+          <RenameProject projectId={project.id} currentName={project.name} />
+        </div>
         <div className="flex flex-row items-center gap-4">
           <ProjectFiles
             projectId={project.id}

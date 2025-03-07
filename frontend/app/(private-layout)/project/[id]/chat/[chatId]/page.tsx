@@ -3,6 +3,7 @@ import prisma from "@/prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import { JsonMessagesArraySchema } from "@/types";
+import LeftPanel from "@/components/left-panel";
 import ChatPage from "@/components/ChatPage";
 import Navbar from "@/components/navbar";
 
@@ -37,6 +38,9 @@ export default async function ProjectChatPage({ params }: PageParams) {
 
   return (
     <>
+      <div className="sm:sticky bg-background sm:w-fit w-full sm:top-32 sm:mb-0 mb-4">
+        <LeftPanel />
+      </div>
       {/* "Project: ___ | Chat: ___" */}
       <Navbar
         projectId={project.id}

@@ -5,6 +5,7 @@ import Navbar from "@/components/navbar";
 import { ProjectFiles } from "@/components/project-files";
 import { ChatList } from "@/components/chat-list";
 import NewChatModal from "@/components/NewChatModal";
+import LeftPanel from "@/components/left-panel";
 import dynamic from "next/dynamic";
 import React from "react";
 
@@ -33,6 +34,9 @@ export default async function ProjectPage({ params: { id: projectId } }: PagePar
   return (
     <>
       {/* Pass project info to Navbar */}
+      <div className="sm:sticky bg-background sm:w-fit w-full sm:top-32 sm:mb-0 mb-4">
+        <LeftPanel />
+      </div>
       <Navbar projectName={project.name} projectId={project.id} />
       <div className="max-w-4xl mx-auto p-4 space-y-6">
         {/* Project header with name and edit icon */}

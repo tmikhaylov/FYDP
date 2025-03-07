@@ -16,7 +16,7 @@ export default function Navbar({ projectName, chatName, projectId }: NavbarProps
       <div className="flex items-center gap-4">
         <NamedLogoWithLink />
         {(projectName || chatName) && (
-          <span className="ml-2 text-sm text-gray-400">
+          <span className="ml-2 text-sm text-gray-800 dark:text-gray-300">
             {projectName && `Project: ${projectName}`} 
             {projectName && chatName && " | "} 
             {chatName && `Chat: ${chatName}`}

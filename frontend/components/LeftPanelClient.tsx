@@ -43,7 +43,9 @@ export default function LeftPanelClient({
   const [projects, setProjects] = useState<Project[]>(initialProjects);
 
   // Tracks which project's dropdown is open (null if none)
-  const [openDropdownProjectId, setOpenDropdownProjectId] = useState<string | null>(null);
+  const [openDropdownProjectId, setOpenDropdownProjectId] = useState<
+    string | null
+  >(null);
 
   // Function to delete a project from the DB and update local state
   const handleDeleteProject = async (projectId: string) => {
@@ -117,7 +119,8 @@ export default function LeftPanelClient({
                       <DropdownMenuTrigger asChild>
                         <button
                           onClick={(e) => {
-                            // Prevent this click from navigating
+                            // Prevent this click from navigating to the project
+                            e.preventDefault();
                             e.stopPropagation();
                           }}
                           className={cn(
@@ -135,7 +138,8 @@ export default function LeftPanelClient({
                         <DropdownMenuItem
                           className="cursor-pointer text-red-500"
                           onClick={(e) => {
-                            // Prevent this click from navigating
+                            // Prevent this click from navigating to the project
+                            e.preventDefault();
                             e.stopPropagation();
                             handleDeleteProject(proj.id);
                           }}

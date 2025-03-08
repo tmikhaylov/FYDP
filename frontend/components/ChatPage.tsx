@@ -6,6 +6,7 @@ import { BsWebcam } from "react-icons/bs";
 import { MdKeyboardVoice } from "react-icons/md";
 import { Input } from "./ui/input";
 import Submit from "./submit";
+import Footer from "./footer";
 import { useToast } from "./ui/use-toast";
 import { generateRandomId } from "@/lib/utils";
 import Image from "next/image";
@@ -726,6 +727,7 @@ export default function ChatPage({
           progress={progress}
           routerRefresh={router.refresh}
         />
+        <Footer />
       </div>
     </div>
   );

@@ -220,10 +220,10 @@ def execute_command():
     have_file = False
     if upload_id:
         have_file = True
-        file_info = uploaded_files.get(upload_id)
+        file_info = [uploaded_files.get(each_id)[0] for each_id in upload_id] # list comprehension
         if not file_info:
             return jsonify({'error': 'Invalid or unknown upload_id'}), 404
-        cmd.extend(["--file", file_info[0]])
+        cmd.extend(["--file"] + file_info)
     env = os.environ.copy()
     if "openai_api_key" in user_config:
         env["OPENAI_API_KEY"] = user_config["openai_api_key"]

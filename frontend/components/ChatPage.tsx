@@ -35,7 +35,7 @@ interface ChatInputProps {
   handleNewMessage: (question: string, attachments: string[]) => string;
   handleUpdateAnswer: (tempId: string, finalAnswer: string) => void;
   uploadFile: (file: File) => Promise<{ upload_id: string; filename: string }>;
-  callExecute: (text: string, uploadId?: string) => Promise<string>;
+  callExecute: (text: string, uploadIds?: string[]) => Promise<string>; // updated to accept a list
   patchConversation: (question: string, answer: string, attachments: string[]) => Promise<void>;
   toast: ({ title, description }: { title: string; description: string }) => void;
   isLoading: boolean;
@@ -198,7 +198,7 @@ export function ChatInput(props: ChatInputProps) {
     try {
       setIsLoading(true);
 
-      let uploadId: string | undefined;
+      let uploadIds: string[] | undefined;
       if (attachments.length > 0) {
         const uploadedAttachments = await Promise.all(
           attachments.map(async (att) => {
@@ -222,11 +222,11 @@ export function ChatInput(props: ChatInputProps) {
           })
         );
         setAttachments(uploadedAttachments);
-        uploadId = uploadedAttachments[0].upload_id;
+        uploadIds = uploadedAttachments.map((att) => att.upload_id!);
       }
 
       const finalText = message || voiceTranscript;
-      const finalAnswer = await callExecute(finalText, uploadId);
+      const finalAnswer = await callExecute(finalText, uploadIds);
       await patchConversation(finalText, finalAnswer, attachmentNames);
       handleUpdateAnswer(tempId, finalAnswer);
 
@@ -620,8 +620,8 @@ export default function ChatPage({
     return { upload_id, filename };
   }
 
-  async function callExecute(text: string, uploadId?: string) {
-    const body = { text, project_id: projectId, upload_id: uploadId };
+  async function callExecute(text: string, uploadIds?: string[]) {
+    const body = { text, project_id: projectId, upload_id: uploadIds };
     const execRes = await fetch("http://127.0.0.1:5000/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

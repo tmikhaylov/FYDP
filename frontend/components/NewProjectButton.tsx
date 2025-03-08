@@ -76,7 +76,7 @@ export default function NewProjectButton({
       <button
         type="button"
         onClick={() => setShowModal(true)}
-        className="flex items-center gap-1 text-sm text-gray-400 px-2 py-1 rounded hover:bg-gray-700 hover:text-white transition-colors"
+        className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-white transition-colors"
       >
         New project
         <IoMdAddCircleOutline className="w-5 h-5" />

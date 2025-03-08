@@ -96,12 +96,12 @@ export default function LeftPanelClient({
                     className={cn(
                       "group w-full my-3 px-8 py-2 rounded-md flex items-center justify-between transition-shadow",
                       isDropdownOpen
-                        ? "shadow-md bg-gray-700"
-                        : "hover:shadow-md hover:bg-gray-700"
+                        ? "shadow-md bg-gray-100 dark:bg-gray-700"
+                        : "hover:shadow-md hover:bg-gray-100 dark:hover:bg-gray-700"
                     )}
                   >
                     {/* Project name */}
-                    <span className="truncate max-w-[70%] no-underline text-inherit">
+                    <span className="truncate max-w-[90%] no-underline text-inherit">
                       {proj.name.length > 35
                         ? proj.name.slice(0, 35) + "..."
                         : proj.name}
@@ -124,7 +124,7 @@ export default function LeftPanelClient({
                             e.stopPropagation();
                           }}
                           className={cn(
-                            "text-gray-300 hover:text-gray-100 transition-opacity",
+                            "text-gray-500 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100 transition-opacity",
                             isDropdownOpen
                               ? "opacity-100"
                               : "opacity-0 group-hover:opacity-100"

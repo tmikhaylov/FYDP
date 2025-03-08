@@ -457,7 +457,7 @@ export function ChatInput(props: ChatInputProps) {
                   setShowPdfModal(false);
                   setPdfName("");
                 }}
-                className="px-8 py-2 bg-gray-500 rounded hover:bg-gray-400"
+                className="px-8 py-2 bg-gray-300 dark:bg-gray-500 rounded hover:bg-gray-200 dark:hover:bg-gray-400"
               >
                 Cancel
               </button>

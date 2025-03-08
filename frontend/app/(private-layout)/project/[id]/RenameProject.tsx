@@ -72,7 +72,7 @@ export default function RenameProject({ projectId, currentName }: RenameProjectP
                   setShowModal(false);
                   setNewName(currentName);
                 }}
-                className="px-10 py-2 bg-gray-500 rounded hover:bg-gray-400"
+                className="px-10 py-2 bg-gray-300 dark:bg-gray-500 rounded hover:bg-gray-200 dark:hover:bg-gray-400"
               >
                 Cancel
               </button>

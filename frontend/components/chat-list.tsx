@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Conversation } from "@prisma/client";
 import { SlOptions } from "react-icons/sl";
 import { RiDeleteBin5Line } from "react-icons/ri";
@@ -97,7 +96,7 @@ export function ChatList({
           return (
             <div
               key={chat.id}
-              // Make each row full-width, clickable, and highlight if dropdown is open or hovered
+              // Make each row a fixed width if desired, clickable, highlight if dropdown is open or hovered
               onClick={() => router.push(`/project/${projectId}/chat/${chat.id}`)}
               className={cn(
                 "group w-[36rem] flex items-center justify-between px-3 py-2 rounded transition-colors cursor-pointer",
@@ -106,7 +105,6 @@ export function ChatList({
                   : "hover:bg-gray-100 dark:hover:bg-gray-800"
               )}
             >
-              {/* Chat name (no <Link> needed since entire row is clickable) */}
               <span className="text-sky-600 truncate max-w-[90%]">
                 {chat.name || "Untitled chat"}
               </span>
@@ -138,8 +136,8 @@ export function ChatList({
                   <DropdownMenuItem
                     className="cursor-pointer text-gray-400 dark:text-gray-100"
                     onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                      e.stopPropagation(); // don't navigate
+                      setOpenDropdownChatId(null); // close the dropdown
                       handleOpenRename(chat.id, chat.name || "");
                     }}
                   >
@@ -149,8 +147,8 @@ export function ChatList({
                   <DropdownMenuItem
                     className="cursor-pointer text-red-500"
                     onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                      e.stopPropagation(); // don't navigate
+                      setOpenDropdownChatId(null); // close the dropdown
                       handleDeleteChat(chat.id);
                     }}
                   >

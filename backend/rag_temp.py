@@ -11,6 +11,9 @@ from llama_index.core import (
     load_index_from_storage
 )
 
+from llama_index.core.storage.chat_store import SimpleChatStore
+from llama_index.core.memory import ChatMemoryBuffer
+
 def load_config(config_path="config.yaml"):
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
@@ -37,7 +40,6 @@ def main():
     # Instantiate the chosen LLM.
     if args.llm.lower() == "openai":
         from llama_index.llms.openai import OpenAI
-        # llm_instance = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         os.environ["OPENAI_API_KEY"] =  config['api_key']['OPEN_AI']
         llm_instance = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     elif args.llm.lower() == "cohere":
@@ -52,12 +54,6 @@ def main():
     if vs_choice == "chroma":
         from llama_index.vector_stores.chroma import ChromaVectorStore
         vector_store_instance = ChromaVectorStore(collection_name="my_collection")
-    # elif vs_choice == "faiss":
-    #     from llama_index.vector_stores.faiss import FaissVectorStore
-    #     vector_store_instance = FaissVectorStore()
-    # elif vs_choice == "pinecone":
-    #     from llama_index.vector_stores.pinecone import PineconeVectorStore
-    #     vector_store_instance = PineconeVectorStore(index_name="my_index")
     elif vs_choice == "local":
         vector_store_instance = None
     else:
@@ -105,10 +101,26 @@ def main():
                 index.insert(d)
             index.storage_context.persist(persist_dir=PERSIST_DIR)
 
-    # Use chat engine if chat mode is enabled.
+    # If chat mode is enabled, set up chat memory.
     if args.chat:
-        chat_engine = index.as_chat_engine()
+        # Define a separate persist path for chat memory
+        chat_store_path = os.path.join(PERSIST_DIR, "chat_store.json")
+        if os.path.exists(chat_store_path):
+            chat_store = SimpleChatStore.from_persist_path(persist_path=chat_store_path)
+        else:
+            chat_store = SimpleChatStore()
+        # Create a ChatMemoryBuffer using the chat store.
+        # Here we use "user1" as a unique key; you could parameterize this if needed.
+        chat_memory = ChatMemoryBuffer.from_defaults(
+            token_limit=3000,
+            chat_store=chat_store,
+            chat_store_key="user1"
+        )
+        # Pass the memory to the chat engine.
+        chat_engine = index.as_chat_engine(memory=chat_memory, llm=llm_instance)
         response = chat_engine.chat(args.query)
+        # Persist the updated chat store for future sessions.
+        chat_store.persist(persist_path=chat_store_path)
     else:
         query_engine = index.as_query_engine()
         response = query_engine.query(args.query)

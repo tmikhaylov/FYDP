@@ -80,8 +80,12 @@ export function ChatInput(props: ChatInputProps) {
   useEffect(() => {
     let stream: MediaStream;
     if (showModal && isCapturing) {
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          const constraints = { video: { deviceId: videoDevices[1]?.deviceId } }; // using index 1
+          return navigator.mediaDevices.getUserMedia(constraints);
+        })
         .then((s) => {
           stream = s;
           setMediaStream(s);
@@ -100,6 +104,7 @@ export function ChatInput(props: ChatInputProps) {
       }
     };
   }, [showModal, isCapturing]);
+  
 
   async function removeOneCapturedImage(filename: string) {
     try {

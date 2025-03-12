@@ -218,7 +218,9 @@ def execute_command():
         "--chat"
     ]
     have_file = False
+    upload_cnt = 0
     if upload_id:
+        upload_cnt = len(upload_id)
         have_file = True
         file_info = [uploaded_files.get(each_id)[0] for each_id in upload_id] # list comprehension
         if not file_info:
@@ -236,10 +238,12 @@ def execute_command():
         err_msg = result.stderr.strip() or "Error running rag_temp.py"
         return jsonify({'error': err_msg}), 400
     if have_file:
-        output = result.stdout.strip().splitlines()[1:]
+        output = result.stdout.strip().splitlines()[upload_cnt:]
     else:
         output = result.stdout.strip().splitlines()
     output = '\n'.join(output)
+    while output[0] == ".":
+        output = output[1:]
     return jsonify({'output': output}), 200
 
 @app.route('/delete', methods=['POST'])
@@ -288,7 +292,7 @@ def delete_file_manual():
 @app.route("/capture-document", methods=["POST"])
 def capture_document():
     data = request.get_json(force=True)
-    camera_index = data.get("camera_index", 0)
+    camera_index = data.get("camera_index", 1)
     output_filename = data.get("output_filename", "captured_document.jpg")
     project_id = data.get("project_id", "project_1")
     should_clean = data.get("should_clean", "")
@@ -315,7 +319,7 @@ def capture_document():
     except Exception as e:
         return jsonify({"error": f"Capture failed: {str(e)}"}), 500
 
-def capture_document_photo(camera_index=0, output_filename="captured_document.jpg", project_id="project_1"):
+def capture_document_photo(camera_index=1, output_filename="captured_document.jpg", project_id="project_1"):
     import cv2
     import time
     cap = cv2.VideoCapture(camera_index)

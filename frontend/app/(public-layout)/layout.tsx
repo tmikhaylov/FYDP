@@ -5,7 +5,7 @@ import { PropsWithChildren } from "react";
 
 export default async function PublicLayout({ children }: PropsWithChildren) {
   const session = await getUser();
-  if (session?.user) redirect("/chat");
+  if (session?.user) redirect("/project");
   return (
     <div>
       <HeroNav />

@@ -1,113 +1,161 @@
-"use server";
+// // "use server";
 
-import { getUser } from "@/lib/auth";
-import { generateRandomId } from "@/lib/utils";
-import prisma from "@/prisma/client";
-import { JsonMessagesArraySchema } from "@/types";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import OpenAI from "openai";
+// import { getUser } from "@/lib/auth";
+// import { generateRandomId } from "@/lib/utils";
+// import prisma from "@/prisma/client";
+// import { redirect } from "next/navigation";
+// import { revalidatePath } from "next/cache";
+// // import { JsonMessagesArraySchema } from "@/types"; // if you need schema validation
 
-export type Message = {
-  message: string;
-  apiKey: string;
-  conversationId: string;
-};
+// // export type NewMessage = {
+// //   message: string;
+// //   files?: File[];
+// // };
 
-export type NewMessage = Omit<Message, "conversationId">;
+// // /**
+// //  * Create a new conversation:
+// //  * 1) Upload the PDF (if any) to your Flask backend -> get upload_id
+// //  * 2) Call /execute with { text, upload_id } -> get answer
+// //  * 3) Save to DB & redirect
+// //  */
+// // export async function newChat(params: NewMessage) {
+// //   const session = await getUser();
+// //   if (!session?.user) redirect("/login");
 
-export async function newChat(params: NewMessage) {
-  const session = await getUser();
-  if (!session?.user) redirect("/login");
-  let id: string | undefined;
-  let error: undefined | { message: string };
-  try {
-    const responseMessage = await createCompletion(
-      params.apiKey,
-      params.message
-    );
-    const newConversationId = generateRandomId(8);
-    const newMessageJson = [
-      {
-        id: newConversationId,
-        question: params.message,
-        answer: responseMessage.message.content,
-      },
-    ];
-    const dataRef = await prisma.conversation.create({
-      data: {
-        messages: newMessageJson,
-        name: params.message,
-        userId: session.user.id,
-      },
-    });
-    id = dataRef.id;
-  } catch (err) {
-    if (err instanceof Error) error = { message: err.message };
-  }
-  console.log(error);
+// //   let uploadId: string | undefined;
 
-  if (error) return error;
-  redirect(`/chat/${id}`);
-}
+// //   // 1) If user attached a file, upload it to /upload
+// //   if (params.files && params.files.length > 0) {
+// //     // We'll just take the first file
+// //     const file = params.files[0];
 
-export async function chat(params: Message) {
-  let error: undefined | { message: string };
-  try {
-    const responseMessage = await createCompletion(
-      params.apiKey,
-      params.message
-    );
-    const newConversationId = generateRandomId(8);
-    const dataRef = await prisma.conversation.findUnique({
-      where: {
-        id: params.conversationId,
-      },
-    });
-    const updatedMessageJson = [
-      ...JsonMessagesArraySchema.parse(dataRef?.messages),
-      {
-        id: newConversationId,
-        question: params.message,
-        answer: responseMessage.message.content,
-      },
-    ];
-    await prisma.conversation.update({
-      where: {
-        id: params.conversationId,
-      },
-      data: {
-        messages: updatedMessageJson,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Error) error = { message: err.message };
-  }
-  console.log(error);
+// //     // Prepare multipart/form-data
+// //     const formData = new FormData();
+// //     formData.append("file", file);
 
-  if (error) return error;
-  revalidatePath(`/chat/${params.conversationId}`);
-}
+// //     const res = await fetch("http://127.0.0.1:5000/upload", {
+// //       method: "POST",
+// //       body: formData,
+// //     });
 
-declare global {
-  var ai_map: undefined | Map<string, OpenAI>;
-}
+// //     if (!res.ok) {
+// //       throw new Error("File upload failed");
+// //     }
+// //     const data = await res.json();
+// //     uploadId = data.upload_id;
+// //   }
 
-const map = globalThis.ai_map ?? new Map<string, OpenAI>();
+// //   // 2) Call /execute with the user's query (text) and upload_id
+// //   const executeRes = await fetch("http://127.0.0.1:5000/execute", {
+// //     method: "POST",
+// //     headers: { "Content-Type": "application/json" },
+// //     body: JSON.stringify({
+// //       text: params.message,
+// //       upload_id: uploadId,
+// //     }),
+// //   });
 
-async function createCompletion(apiKey: string, message: string) {
-  let ai: OpenAI;
-  if (map.has(apiKey)) {
-    ai = map.get(apiKey)!;
-  } else {
-    ai = new OpenAI({
-      apiKey,
-    });
-    map.set(apiKey, ai);
-  }
-  const chatCompletion = await ai.chat.completions.create({
-    messages: [{ role: "user", content: message }],
-    model: "gpt-3.5-turbo",
-  });
-  return chatCompletion.choices[0];
-}
+// //   if (!executeRes.ok) {
+// //     const errData = await executeRes.json().catch(() => ({}));
+// //     throw new Error(errData?.error || "Execute command failed");
+// //   }
+
+// //   const executeData = await executeRes.json();
+// //   const answer = executeData.output || "No answer";
+
+// //   // 3) Store result in DB
+// //   const newConversationId = generateRandomId(8);
+// //   const newMessageJson = [
+// //     {
+// //       id: newConversationId,
+// //       question: params.message,
+// //       answer: answer,
+// //     },
+// //   ];
+
+// //   const dataRef = await prisma.conversation.create({
+// //     data: {
+// //       messages: newMessageJson,
+// //       name: params.message,
+// //       userId: session.user.id,
+// //     },
+// //   });
+
+// //   // 4) Redirect to new chat
+// //   redirect(`/chat/${dataRef.id}`);
+// // }
+
+// // /**
+// //  * Add a message to an existing conversation:
+// //  * - Optionally re-upload a file, or skip if no file
+// //  * - /execute again
+// //  * - Update conversation in DB
+// //  */
+// // export async function chat(params: {
+// //   conversationId: string;
+// //   message: string;
+// //   files?: File[];
+// // }) {
+// //   // If you want the same logic as `newChat`, just do the same steps:
+// //   // 1) Upload file -> get upload_id
+// //   // 2) /execute { text, upload_id }
+// //   // 3) Update DB with new Q/A
+// //   // 4) Revalidate
+
+// //   // For brevity, a simplified example:
+// //   let uploadId: string | undefined;
+// //   if (params.files && params.files.length > 0) {
+// //     const file = params.files[0];
+// //     const formData = new FormData();
+// //     formData.append("file", file);
+// //     const res = await fetch("http://127.0.0.1:5000/upload", {
+// //       method: "POST",
+// //       body: formData,
+// //     });
+// //     if (!res.ok) throw new Error("File upload failed");
+// //     uploadId = (await res.json()).upload_id;
+// //   }
+
+//   // /execute
+//   const executeRes = await fetch("http://127.0.0.1:5000/execute", {
+//     method: "POST",
+//     headers: { "Content-Type": "application/json" },
+//     body: JSON.stringify({
+//       text: params.message,
+//       upload_id: uploadId,
+//     }),
+//   });
+
+//   if (!executeRes.ok) {
+//     const errData = await executeRes.json().catch(() => ({}));
+//     throw new Error(errData?.error || "Execute command failed");
+//   }
+
+//   const executeData = await executeRes.json();
+//   const answer = executeData.output || "No answer";
+
+//   // Update existing conversation
+//   const existing = await prisma.conversation.findUnique({
+//     where: { id: params.conversationId },
+//   });
+//   if (!existing) throw new Error("Conversation not found");
+
+//   // Example: parse, push new Q/A, update
+//   // If you have a JSON schema, do that here
+//   const updatedMessages = [
+//     ...(existing.messages as any[]), // or validate
+//     {
+//       id: generateRandomId(8),
+//       question: params.message,
+//       answer: answer,
+//     },
+//   ];
+
+//   await prisma.conversation.update({
+//     where: { id: params.conversationId },
+//     data: { messages: updatedMessages },
+//   });
+
+//   // Revalidate or redirect
+//   revalidatePath(`/chat/${params.conversationId}`);
+// }

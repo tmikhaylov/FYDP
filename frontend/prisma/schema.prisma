@@ -33,18 +33,40 @@ model User {
   emailVerified DateTime?
   image         String?
 
-  conversations Conversation[]
+  // Instead of 'conversations', the user now has multiple projects
+  projects      Project[]
   accounts      Account[]
 }
 
+// New model to represent a project
+model Project {
+  id        String        @id @default(cuid())
+  name      String
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  chats     Conversation[]
+  files     ProjectFile[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+// Each file belongs to one project
+model ProjectFile {
+  id         String   @id @default(cuid())
+  filename   String
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Renamed 'Conversation' in code to 'Chat' in UI, but keep model name for minimal DB changes
 model Conversation {
-  id       String @id @default(cuid())
-  name     String
-  messages Json
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(cuid())
+  name      String
+  messages  Json
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }

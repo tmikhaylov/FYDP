@@ -1,7 +1,14 @@
 frontend/.env*
 frontend/node_modules
 frontend/.next*
-backend/venv/
-backend/app.env
-backend/.DS_Store
 .DS_Store
+backend/.DS_Store
+backend/C:/*
+backend/venv/*
+frontend/projects/*
+frontend/prisma/migrations/*
+backend/config.yaml
+backend/newenv/*
+frontend/public/*
+backend/storage/*
+backend/uploaded_files.json
